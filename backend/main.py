@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from product_data import get_product
 from scoring import sustainability_score, health_score, transparency_score, social_score, waspas_score
+from greenwashing import extract_eco_claims, greenwashing_risk
 
 app = FastAPI()
 
@@ -24,11 +25,14 @@ def product(barcode: str, w1: float=0.25, w2: float=0.25, w3: float=0.25, w4: fl
     certs = p.get("labels_tags", [])
     ingredients = p.get("ingredients_text", "")
     packaging = p.get("packaging", "")
+    description = p.get("generic_name", "") + " " + p.get("product_name", "")
     s1 = sustainability_score(certs, packaging)
     s2 = health_score(ingredients)
     s3 = transparency_score(certs, ingredients)
     s4 = social_score(certs)
     composite = waspas_score([s1, s2, s3, s4], [w1, w2, w3, w4])
+    claims = extract_eco_claims(description)
+    gw = greenwashing_risk(claims, certs)
     return {
         "name": p.get("product_name", "Unknown"),
         "brand": p.get("brands", "Unknown"),
@@ -38,5 +42,6 @@ def product(barcode: str, w1: float=0.25, w2: float=0.25, w3: float=0.25, w4: fl
             "transparency": s3,
             "social": s4
         },
-        "composite": composite
+        "composite": composite,
+        "greenwashing": gw
     }
