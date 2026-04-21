@@ -5,6 +5,21 @@ function App() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [weights, setWeights] = useState([0.25, 0.25, 0.25, 0.25]);
+
+  const labels = ["Sustainability", "Health", "Transparency", "Social"];
+
+  const updateWeight = (index, newVal) => {
+    const val = parseFloat(newVal);
+    const remaining = 1 - val;
+    const otherTotal = weights.reduce((s, w, i) => i !== index ? s + w : s, 0);
+    const newWeights = weights.map((w, i) => {
+      if (i === index) return val;
+      if (otherTotal === 0) return remaining / 3;
+      return parseFloat(((w / otherTotal) * remaining).toFixed(2));
+    });
+    setWeights(newWeights);
+  };
 
   const search = async () => {
     if (!barcode) return;
@@ -12,7 +27,9 @@ function App() {
     setError("");
     setProduct(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8080/product/${barcode}`);
+      const res = await fetch(
+        `http://127.0.0.1:8080/product/${barcode}?w1=${weights[0]}&w2=${weights[1]}&w3=${weights[2]}&w4=${weights[3]}`
+      );
       const data = await res.json();
       if (data.error) {
         setError("Product not found. Try another barcode.");
@@ -26,7 +43,7 @@ function App() {
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif", padding: "0 20px" }}>
+    <div style={{ maxWidth: 620, margin: "40px auto", fontFamily: "sans-serif", padding: "0 20px" }}>
       <h1 style={{ color: "#1a5c3a" }}>🌿 ClarityX</h1>
       <p style={{ color: "#555" }}>Product sustainability transparency platform</p>
 
@@ -46,6 +63,27 @@ function App() {
         </button>
       </div>
 
+      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 20, marginBottom: 24, background: "#f9fdf9" }}>
+        <h3 style={{ margin: "0 0 16px", fontSize: 15 }}>Your priorities (adjust before searching)</h3>
+        {labels.map((label, i) => (
+          <div key={label} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 14 }}>{label}</span>
+              <span style={{ fontSize: 14, fontWeight: "bold" }}>{Math.round(weights[i] * 100)}%</span>
+            </div>
+            <input
+              type="range" min="0.05" max="0.85" step="0.01"
+              value={weights[i]}
+              onChange={e => updateWeight(i, e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </div>
+        ))}
+        <p style={{ fontSize: 12, color: "#888", margin: "8px 0 0" }}>
+          Total: {Math.round(weights.reduce((s, w) => s + w, 0) * 100)}% — sliders auto-balance
+        </p>
+      </div>
+
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
@@ -54,7 +92,7 @@ function App() {
           <h2 style={{ margin: "0 0 4px" }}>{product.name}</h2>
           <p style={{ color: "#888", margin: "0 0 20px" }}>{product.brand}</p>
 
-          <h3>Scores</h3>
+          <h3 style={{ margin: "0 0 12px" }}>Scores</h3>
           {Object.entries(product.scores).map(([key, val]) => (
             <div key={key} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -68,7 +106,7 @@ function App() {
           ))}
 
           <div style={{ marginTop: 20, padding: 16, background: "#f9f9f9", borderRadius: 8 }}>
-            <strong>Composite Score: {product.composite}/100</strong>
+            <strong>Composite Score (WASPAS): {product.composite}/100</strong>
           </div>
 
           <div style={{ marginTop: 12, padding: 16, borderRadius: 8, background: product.greenwashing.risk === "Low" ? "#e8f5e9" : product.greenwashing.risk === "Medium" ? "#fff8e1" : "#ffebee" }}>
