@@ -1,9 +1,11 @@
 import { useState } from "react";
+import BarcodeScanner from "./BarcodeScanner";
 
 function App() {
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [weights, setWeights] = useState([0.25, 0.25, 0.25, 0.25]);
 
@@ -47,7 +49,7 @@ function App() {
       <h1 style={{ color: "#1a5c3a" }}>🌿 ClarityX</h1>
       <p style={{ color: "#555" }}>Product sustainability transparency platform</p>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input
           style={{ flex: 1, padding: "10px 14px", fontSize: 16, border: "1px solid #ccc", borderRadius: 8 }}
           placeholder="Enter barcode e.g. 3017620422003"
@@ -61,7 +63,20 @@ function App() {
         >
           Search
         </button>
+        <button
+          style={{ padding: "10px 16px", background: "#555", color: "white", border: "none", borderRadius: 8, fontSize: 16, cursor: "pointer" }}
+          onClick={() => setScanning(!scanning)}
+        >
+          📷 Scan
+        </button>
       </div>
+
+      {scanning && (
+        <BarcodeScanner
+          onScan={(code) => { setBarcode(code); setScanning(false); }}
+          onClose={() => setScanning(false)}
+        />
+      )}
 
       <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 20, marginBottom: 24, background: "#f9fdf9" }}>
         <h3 style={{ margin: "0 0 16px", fontSize: 15 }}>Your priorities (adjust before searching)</h3>
@@ -112,6 +127,11 @@ function App() {
           <div style={{ marginTop: 12, padding: 16, borderRadius: 8, background: product.greenwashing.risk === "Low" ? "#e8f5e9" : product.greenwashing.risk === "Medium" ? "#fff8e1" : "#ffebee" }}>
             <strong>Greenwashing Risk: {product.greenwashing.risk}</strong>
             <p style={{ margin: "4px 0 0", fontSize: 14 }}>{product.greenwashing.reason}</p>
+          </div>
+
+          <div style={{ marginTop: 12, padding: 16, borderRadius: 8, background: "#f0f4ff" }}>
+            <strong>Product Longevity: {product.longevity.label}</strong>
+            <p style={{ margin: "4px 0 0", fontSize: 14 }}>Durability score: {product.longevity.score}/100</p>
           </div>
         </div>
       )}

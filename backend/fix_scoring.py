@@ -1,4 +1,4 @@
-def sustainability_score(certifications, packaging, ingredients_text):
+content = """def sustainability_score(certifications, packaging, ingredients_text):
     score = 50
     good_certs = ["en:organic", "en:fair-trade", "en:rainforest-alliance", "en:fsc", "en:ecocert", "en:eu-organic"]
     for cert in certifications:
@@ -48,3 +48,8 @@ def waspas_score(scores, weights, lam=0.5):
         wpm *= (max(s, 1) / 100) ** w
     wpm *= 100
     return round(lam * wsm + (1 - lam) * wpm, 1)
+"""
+
+with open('scoring.py', 'w') as f:
+    f.write(content)
+print('scoring.py written successfully')
