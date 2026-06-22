@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from product_data import get_product
+from heritage import heritage_facts
 from scoring import sustainability_score, health_score, transparency_score, social_score, waspas_score
 from greenwashing import extract_eco_claims, greenwashing_risk
-from nlp import longevity_score
 
 app = FastAPI()
 
@@ -39,14 +39,9 @@ def product(barcode: str, w1: float=0.25, w2: float=0.25, w3: float=0.25, w4: fl
     claims = extract_eco_claims(description + " " + ingredients + " " + packaging)
     gw = greenwashing_risk(claims, certs, brand, packaging, ingredients)
     
-    test_reviews = [
-        f"This {p.get('product_name','product')} lasted a long time, great quality",
-        f"The {p.get('product_name','product')} broke after one week, very cheap",
-        f"Still using this after 6 months, very durable and sturdy",
-        f"Fell apart quickly, not worth the money",
-        f"Excellent product, months later still working perfectly"
-    ]
-    longevity = longevity_score(test_reviews)
+    # Never present generated placeholder text as customer-review evidence.
+    longevity = {"label": "Not assessed", "reason": "No verified, attributable review source is connected."}
+    heritage = heritage_facts(ingredients)
 
     return {
         "name": p.get("product_name", "Unknown"),
@@ -59,7 +54,9 @@ def product(barcode: str, w1: float=0.25, w2: float=0.25, w3: float=0.25, w4: fl
         },
         "composite": composite,
         "greenwashing": gw,
-        "longevity": longevity
+        "longevity": longevity,
+        "data_sources": p.get("_source", ""),
+        "heritage_facts": heritage,
     }
 
 @app.get("/longevity/{barcode}")
@@ -67,14 +64,7 @@ def longevity_endpoint(barcode: str):
     p = get_product(barcode)
     if not p:
         return {"error": "Product not found"}
-    test_reviews = [
-        f"This {p.get('product_name','product')} lasted a long time, great quality",
-        f"The {p.get('product_name','product')} broke after one week, very cheap",
-        f"Still using this after 6 months, very durable and sturdy",
-        f"Fell apart quickly, not worth the money",
-        f"Excellent product, months later still working perfectly"
-    ]
-    result = longevity_score(test_reviews)
+    result = {"label": "Not assessed", "reason": "No verified, attributable review source is connected."}
     return {
         "product": p.get("product_name", "Unknown"),
         "longevity": result

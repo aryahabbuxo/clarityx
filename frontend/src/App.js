@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 
 const GREEN_DARK = "#1e3d2f";
@@ -7,22 +7,6 @@ const GREEN_ACCENT = "#3a8a5a";
 const GREEN_LIGHT = "#e8f5e0";
 const GREEN_MUTED = "#6aaa7e";
 const BG = "#f5f6f0";
-
-const CATALOGUE_PRODUCTS = [
-  { name: "Organic Green Tea", brand: "EcoLeaf", category: "Beverages", scores: { sustainability: 92, health: 89, transparency: 84, social: 83 }, waspas: 87, risk: "Low", longevity: "High" },
-  { name: "Reusable Water Bottle", brand: "HydroSave", category: "Lifestyle", scores: { sustainability: 95, health: 88, transparency: 90, social: 91 }, waspas: 85, risk: "Low", longevity: "High" },
-  { name: "Zero Shampoo Bar", brand: "PureRoots", category: "Personal Care", scores: { sustainability: 81, health: 75, transparency: 78, social: 78 }, waspas: 78, risk: "Medium", longevity: "Good" },
-  { name: "Nutella Hazelnut Spread", brand: "Ferrero", category: "Food", scores: { sustainability: 35, health: 65, transparency: 100, social: 50 }, waspas: 62, risk: "Medium", longevity: "Good" },
-  { name: "Ecover Washing Liquid", brand: "Ecover", category: "Household", scores: { sustainability: 91, health: 84, transparency: 79, social: 88 }, waspas: 86, risk: "Low", longevity: "High" },
-  { name: "Tony's Chocolonely Dark", brand: "Tony's", category: "Confectionery", scores: { sustainability: 74, health: 65, transparency: 92, social: 95 }, waspas: 83, risk: "Low", longevity: "Good" },
-];
-
-const DB_STATS = [
-  { val: "10,000+", label: "Products Verified" },
-  { val: "95%", label: "Accuracy Rate" },
-  { val: "500K+", label: "Scans Performed" },
-  { val: "50+", label: "Partner Brands" },
-];
 
 function scoreColor(v) {
   if (v >= 70) return GREEN_ACCENT;
@@ -164,6 +148,18 @@ function ProductCard({ p, isActive, offset, onClick }) {
           {p.greenwashing.reason}
         </div>
       )}
+
+      {p.heritageFacts?.[0] && (
+        <div role="status" style={{ marginTop: 16, background: "#f2f8e9", border: "1px solid #cfe3b5", borderRadius: 12, padding: "12px 13px", color: "#31562d" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 5 }}>Heritage fun fact</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>{p.heritageFacts[0].fun_fact}</div>
+          <div style={{ fontSize: 10, lineHeight: 1.35, marginTop: 7, color: "#668363" }}>{p.heritageFacts[0].disclaimer}</div>
+        </div>
+      )}
+
+      {p.dataSources && (
+        <div style={{ marginTop: 10, fontSize: 10, color: "#8aa48f", textAlign: "center" }}>Data: {p.dataSources}</div>
+      )}
     </div>
   );
 }
@@ -209,7 +205,11 @@ function CardCarousel({ products }) {
   );
 }
 
-function HomePage() {
+function HomePage({ products }) {
+  const scans = products.length;
+  const averageScore = scans ? Math.round(products.reduce((sum, p) => sum + (p.waspas || 0), 0) / scans) : null;
+  const heritageMatches = products.reduce((sum, p) => sum + (p.heritageFacts?.length || 0), 0);
+  const lowRisk = products.filter((p) => p.risk === "Low").length;
   return (
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 16, fontWeight: 600 }}>Product Lookup</div>
@@ -221,14 +221,23 @@ function HomePage() {
       </p>
 
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, color: "#0d3d22", fontWeight: 600, marginBottom: 4, letterSpacing: "-0.3px" }}>Featured Products</h2>
-        <p style={{ fontSize: 14, color: GREEN_MUTED, fontWeight: 400 }}>Browse our verified sustainable product catalogue</p>
+        <h2 style={{ fontSize: 22, color: "#0d3d22", fontWeight: 600, marginBottom: 4, letterSpacing: "-0.3px" }}>Your recent lookups</h2>
+        <p style={{ fontSize: 14, color: GREEN_MUTED, fontWeight: 400 }}>Saved in this browser, so your dashboard reflects real scans instead of sample products.</p>
       </div>
 
-      <CardCarousel products={CATALOGUE_PRODUCTS} />
+      {scans ? <CardCarousel products={products} /> : (
+        <div style={{ background: "#fff", border: "1.5px dashed #c5dfc5", borderRadius: 16, padding: "44px 28px", textAlign: "center", color: GREEN_MUTED }}>
+          Your first verified lookup will appear here.
+        </div>
+      )}
 
       <div style={{ background: "#fff", borderRadius: 16, padding: "28px 0", margin: "40px 0 0", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
-        {DB_STATS.map((s, i) => (
+        {[
+          { val: scans, label: "Lookups saved" },
+          { val: averageScore === null ? "—" : `${averageScore}/100`, label: "Average score" },
+          { val: heritageMatches, label: "Heritage matches" },
+          { val: lowRisk, label: "Low-risk products" },
+        ].map((s, i) => (
           <div key={s.label} style={{ textAlign: "center", borderRight: i < 3 ? "1px solid #e5f0e5" : "none", padding: "0 20px" }}>
             <div style={{ fontSize: 34, color: GREEN_MID, fontWeight: 600, lineHeight: 1, letterSpacing: "-1px" }}>{s.val}</div>
             <div style={{ fontSize: 12, color: "#8abf9a", letterSpacing: "1px", textTransform: "uppercase", marginTop: 8, fontWeight: 500 }}>{s.label}</div>
@@ -239,7 +248,7 @@ function HomePage() {
   );
 }
 
-function SearchPage() {
+function SearchPage({ onProductLookup }) {
   const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultProducts, setResultProducts] = useState([]);
@@ -280,8 +289,11 @@ function SearchPage() {
         risk: data.greenwashing?.risk || "Unknown",
         longevity: data.longevity || null,
         greenwashing: data.greenwashing,
+        heritageFacts: data.heritage_facts || [],
+        dataSources: data.data_sources,
       };
       setResultProducts([card]);
+      onProductLookup({ ...card, barcode: barcode.trim() });
     } catch { setError("Could not connect to server. Make sure your backend is running on port 8080."); }
     setLoading(false);
   };
@@ -354,61 +366,165 @@ function SearchPage() {
   );
 }
 
-function ScanPage({ onSwitchToSearch }) {
-  const [scanning, setScanning] = useState(false);
+function ScanPage({ onSwitchToSearch, onProductLookup }) {
+  const [scanning, setScanning]     = useState(false);
   const [scannedCode, setScannedCode] = useState("");
-
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState(null);
+  const [error, setError]           = useState("");
+ 
+  // Called automatically the moment the camera reads a barcode.
+  // Closes the camera, saves the code, and fires the API call immediately.
+  const handleScan = async (code) => {
+    setScanning(false);
+    setScannedCode(code);
+    setResult(null);
+    setError("");
+    setLoading(true);
+ 
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8080/product/${code}?w1=0.25&w2=0.25&w3=0.25&w4=0.25`
+      );
+      const data = await res.json();
+ 
+      if (data.error) {
+        setError("Product not found in any database.");
+      } else {
+        // Shape the API response into the same card format used by SearchPage
+        // and CardCarousel so the exact same ProductCard renders here.
+        const card = {
+          name:       data.name,
+          brand:      data.brand,
+          category:   "Scanned Product",
+          scores:     data.scores,
+          waspas:     data.composite,
+          composite:  data.composite,
+          risk:       data.greenwashing?.risk || "Unknown",
+          longevity:  data.longevity || null,
+          greenwashing: data.greenwashing,
+          heritageFacts: data.heritage_facts || [],
+          dataSources: data.data_sources,
+          barcode: code,
+        };
+        setResult(card);
+        onProductLookup(card);
+      }
+    } catch {
+      setError("Could not connect to backend. Make sure it's running on port 8080.");
+    }
+ 
+    setLoading(false);
+  };
+ 
+  const resetScan = () => {
+    setScanning(true);
+    setScannedCode("");
+    setResult(null);
+    setError("");
+  };
+ 
   return (
     <div style={{ padding: "40px 52px" }}>
-      <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Barcode Scanner</div>
-      <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>Scan a product</h2>
-      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 40, fontWeight: 400, lineHeight: 1.7 }}>Use your device camera to instantly scan any product barcode and retrieve its sustainability profile.</p>
-
+      {/* Page header */}
+      <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>
+        Barcode Scanner
+      </div>
+      <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>
+        Scan a product
+      </h2>
+      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 40, fontWeight: 400, lineHeight: 1.7 }}>
+        Use your device camera to instantly scan any product barcode and retrieve its sustainability profile.
+      </p>
+ 
+      {/* Detected barcode banner — shown as soon as a code is read */}
       {scannedCode && (
         <div style={{ background: GREEN_LIGHT, border: `1px solid ${GREEN_MID}`, borderRadius: 10, padding: 16, marginBottom: 24, fontSize: 14, color: "#0d3d22", fontWeight: 500 }}>
-          Barcode Detected: <strong>{scannedCode}</strong> — Head to Search to look it up.
+          Barcode detected: <strong>{scannedCode}</strong>
+          {loading && <span style={{ color: GREEN_MUTED, fontWeight: 400 }}> — Fetching product data…</span>}
         </div>
       )}
-
-      {!scanning ? (
+ 
+      {/* Camera feed (active) or idle placeholder */}
+      {scanning ? (
+        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+          {/* BarcodeScanner calls onScan(code) automatically; no button press needed */}
+          <BarcodeScanner
+            onScan={handleScan}
+            onClose={() => setScanning(false)}
+          />
+        </div>
+      ) : (
         <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #c5dfc5", padding: 48, textAlign: "center", maxWidth: 440, margin: "0 auto" }}>
+          {/* Viewfinder graphic */}
           <div style={{ width: 160, height: 160, border: `2.5px solid ${GREEN_MID}`, borderRadius: 16, margin: "0 auto 32px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <div style={{ position: "absolute", top: -2, left: -2, width: 24, height: 24, borderTop: `3px solid ${GREEN_DARK}`, borderLeft: `3px solid ${GREEN_DARK}` }} />
-            <div style={{ position: "absolute", top: -2, right: -2, width: 24, height: 24, borderTop: `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
-            <div style={{ position: "absolute", bottom: -2, left: -2, width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderLeft: `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", top: -2, left: -2,  width: 24, height: 24, borderTop:    `3px solid ${GREEN_DARK}`, borderLeft:  `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", top: -2, right: -2, width: 24, height: 24, borderTop:    `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", bottom: -2, left: -2,  width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderLeft:  `3px solid ${GREEN_DARK}` }} />
             <div style={{ position: "absolute", bottom: -2, right: -2, width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
             <ScanIcon size={48} color="#c5dfc5" />
           </div>
-          <p style={{ fontSize: 15, color: "#5a7a6a", marginBottom: 8, fontWeight: 500 }}>Point your camera at any product barcode</p>
-          <p style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 28, fontWeight: 400 }}>Supported on most modern browsers with camera access enabled.</p>
+ 
+          <p style={{ fontSize: 15, color: "#5a7a6a", marginBottom: 8, fontWeight: 500 }}>
+            Point your camera at any product barcode
+          </p>
+          <p style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 28, fontWeight: 400 }}>
+            Results appear automatically — no button press needed.
+          </p>
+ 
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-            <button onClick={() => setScanning(true)} style={{ padding: "12px 24px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-              Open Camera
+            <button
+              onClick={resetScan}
+              style={{ padding: "12px 24px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            >
+              {scannedCode ? "Scan Again" : "Open Camera"}
             </button>
-            <button onClick={onSwitchToSearch} style={{ padding: "12px 24px", background: "#fff", color: GREEN_MID, border: `1.5px solid ${GREEN_MID}`, borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+            <button
+              onClick={onSwitchToSearch}
+              style={{ padding: "12px 24px", background: "#fff", color: GREEN_MID, border: `1.5px solid ${GREEN_MID}`, borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+            >
               Enter Manually
             </button>
           </div>
         </div>
-      ) : (
-        <div style={{ maxWidth: 440, margin: "0 auto" }}>
-          <BarcodeScanner
-            onScan={(code) => { setScannedCode(code); setScanning(false); }}
-            onClose={() => setScanning(false)}
-          />
+      )}
+ 
+      {/* Loading indicator */}
+      {loading && (
+        <div style={{ textAlign: "center", color: GREEN_MUTED, padding: 40, fontSize: 15, fontWeight: 500 }}>
+          Analysing product data…
+        </div>
+      )}
+ 
+      {/* Error state */}
+      {error && (
+        <div style={{ background: "#fff0f0", color: "#b83232", padding: 16, borderRadius: 10, fontSize: 14, fontWeight: 500, marginTop: 24 }}>
+          {error}
+        </div>
+      )}
+ 
+      {/* Result card — reuses the exact same CardCarousel + ProductCard as SearchPage */}
+      {result && !loading && (
+        <div style={{ marginTop: 32 }}>
+          <h3 style={{ fontSize: 18, color: "#0d3d22", fontWeight: 600, marginBottom: 4 }}>Result</h3>
+          <p style={{ fontSize: 13, color: GREEN_MUTED, fontWeight: 400, marginBottom: 16 }}>
+            Scanned product analysis
+          </p>
+          <CardCarousel products={[result]} />
         </div>
       )}
     </div>
   );
 }
 
-function AnalyticsPage() {
+function AnalyticsPage({ products }) {
+  const hasProducts = products.length > 0;
   const avgScores = ["sustainability", "health", "transparency", "social"].map((key) => ({
     label: key,
-    avg: Math.round(CATALOGUE_PRODUCTS.reduce((s, p) => s + p.scores[key], 0) / CATALOGUE_PRODUCTS.length),
+    avg: hasProducts ? Math.round(products.reduce((s, p) => s + p.scores[key], 0) / products.length) : 0,
   }));
-  const avgWaspas = Math.round(CATALOGUE_PRODUCTS.reduce((s, p) => s + p.waspas, 0) / CATALOGUE_PRODUCTS.length);
-  const lowRisk = CATALOGUE_PRODUCTS.filter((p) => p.risk === "Low").length;
+  const avgWaspas = hasProducts ? Math.round(products.reduce((s, p) => s + p.waspas, 0) / products.length) : 0;
+  const lowRisk = products.filter((p) => p.risk === "Low").length;
 
   return (
     <div style={{ padding: "40px 52px" }}>
@@ -418,7 +534,7 @@ function AnalyticsPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
         {[
           { label: "Avg. WASPAS Score", val: avgWaspas, sub: "Across all catalogued products" },
-          { label: "Products Catalogued", val: CATALOGUE_PRODUCTS.length, sub: "In current session" },
+          { label: "Products Analysed", val: products.length, sub: "Saved in this browser" },
           { label: "Low Risk Products", val: lowRisk, sub: "Below greenwashing threshold" },
         ].map((c) => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: 24, border: "1px solid #e0ede0" }}>
@@ -431,6 +547,7 @@ function AnalyticsPage() {
 
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 20 }}>Average Scores by Dimension</div>
+        {!hasProducts && <p style={{ fontSize: 14, color: GREEN_MUTED, marginBottom: 20 }}>No verified lookups yet. Scan or search a barcode to build your personal analytics.</p>}
         {avgScores.map((s) => (
           <div key={s.label} style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -455,7 +572,7 @@ function AnalyticsPage() {
             </tr>
           </thead>
           <tbody>
-            {CATALOGUE_PRODUCTS.map((p, i) => {
+            {products.map((p, i) => {
               const rs = riskStyle(p.risk);
               return (
                 <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
@@ -468,6 +585,7 @@ function AnalyticsPage() {
                 </tr>
               );
             })}
+            {!hasProducts && <tr><td colSpan="4" style={{ padding: "18px 12px", color: GREEN_MUTED }}>No products analysed yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -544,12 +662,23 @@ function Sidebar({ active, onNavigate }) {
 
 export default function App() {
   const [page, setPage] = useState("home");
+  const [products, setProducts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("clarityx-lookups")) || []; } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("clarityx-lookups", JSON.stringify(products.slice(0, 12)));
+  }, [products]);
+
+  const recordProduct = (product) => {
+    setProducts((current) => [product, ...current.filter((item) => item.barcode !== product.barcode)].slice(0, 12));
+  };
 
   const pages = {
-    home: <HomePage />,
-    search: <SearchPage />,
-    scan: <ScanPage onSwitchToSearch={() => setPage("search")} />,
-    analytics: <AnalyticsPage />,
+    home: <HomePage products={products} />,
+    search: <SearchPage onProductLookup={recordProduct} />,
+    scan: <ScanPage onSwitchToSearch={() => setPage("search")} onProductLookup={recordProduct} />,
+    analytics: <AnalyticsPage products={products} />,
     about: <AboutPage />,
   };
 
@@ -558,6 +687,9 @@ export default function App() {
       <Sidebar active={page} onNavigate={setPage} />
       <main style={{ flex: 1, overflowY: "auto", minHeight: "100vh" }}>
         {pages[page]}
+        <footer style={{ padding: "24px 52px 32px", color: "#668363", fontSize: 12, lineHeight: 1.6 }}>
+          <strong style={{ color: "#31562d" }}>How ClarityX works:</strong> Product details come from Open Food Facts, Open Beauty Facts, UPCitemdb, Go-UPC, and—when a medicine name matches—OpenFDA. Scores combine the visible ingredient list, packaging, labels, and brand signals using the weights you choose. We do not publish customer reviews; the current longevity signal is a prototype and should not be treated as a verified review score. Heritage notes describe traditional use only, not medical advice.
+        </footer>
       </main>
     </div>
   );
