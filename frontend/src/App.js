@@ -9,7 +9,7 @@ const GREEN_MUTED = "#6aaa7e";
 const BG = "#f5f6f0";
 const STORAGE_KEY = "clarityx-lookups";
 const LEGACY_STORAGE_KEYS = ["clarityx-products", "clarityx-scans", "clarityx-product-data"];
-const PRODUCT_SCHEMA_VERSION = 2;
+const PRODUCT_SCHEMA_VERSION = 3;
 const SCORE_KEYS = [
   "regulatory_compliance",
   "ingredient_safety",
@@ -113,6 +113,7 @@ function migrateProduct(product) {
     scores,
     waspas: compositeScore,
     composite: compositeScore,
+    heritageFacts: Array.isArray(product.heritageFacts) ? product.heritageFacts : [],
   };
 
   return isCompleteProductScore(migrated) ? migrated : null;
