@@ -1,0 +1,15 @@
+{
+  "version": "nin-local-nutrient-reference-v1-2026-06",
+  "source": "https://www.nin.res.in/",
+  "update_workflow": [
+    "Review current NIN nutrient and dietary reference publications.",
+    "Update nutrient identifiers and reference notes.",
+    "Increment version and store source publication metadata."
+  ],
+  "records": [
+    {"ingredient": "sugar", "nutrient": "free sugar", "reference_note": "local structured nutrient reference"},
+    {"ingredient": "salt", "nutrient": "sodium", "reference_note": "local structured nutrient reference"},
+    {"ingredient": "ascorbic acid", "nutrient": "vitamin C", "reference_note": "local structured nutrient reference"}
+  ]
+}
+

@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "nin-local-nutrient-reference-v1-2026-06"
+    },
+    "evidence_type": "nutrition",
+    "ingredient": "7%",
+    "references": [
+      "https://www.nin.res.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.651495+00:00",
+    "source": "NIN",
+    "status": "UNKNOWN"
+  },
+  "provider": "NIN",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "nin-local-nutrient-reference-v1-2026-06"
+    },
+    "evidence_type": "nutrition",
+    "ingredient": "7%",
+    "references": [
+      "https://www.nin.res.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.651495+00:00",
+    "source": "NIN",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.653508+00:00",
+  "version": "nin-local-nutrient-reference-v1-2026-06"
+}

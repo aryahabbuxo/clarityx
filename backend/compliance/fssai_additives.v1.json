@@ -1,0 +1,15 @@
+{
+  "version": "fssai-additive-compliance-local-v1-2026-06",
+  "source": "https://www.fssai.gov.in/",
+  "update_workflow": [
+    "Review latest FSSAI food additive notifications.",
+    "Map additive permissions, restrictions, and food categories into this structure.",
+    "Increment version and preserve source notification references."
+  ],
+  "records": [
+    {"ingredient": "citric acid", "status": "PERMITTED", "category_mapping": "food additive", "notification_reference": "local reference placeholder"},
+    {"ingredient": "sodium benzoate", "status": "RESTRICTED", "category_mapping": "preservative", "notification_reference": "local reference placeholder"},
+    {"ingredient": "ascorbic acid", "status": "PERMITTED", "category_mapping": "antioxidant", "notification_reference": "local reference placeholder"}
+  ]
+}
+

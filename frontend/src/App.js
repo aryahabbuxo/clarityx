@@ -7,6 +7,147 @@ const GREEN_ACCENT = "#3a8a5a";
 const GREEN_LIGHT = "#e8f5e0";
 const GREEN_MUTED = "#6aaa7e";
 const BG = "#f5f6f0";
+const STORAGE_KEY = "clarityx-lookups";
+const LEGACY_STORAGE_KEYS = ["clarityx-products", "clarityx-scans", "clarityx-product-data"];
+const PRODUCT_SCHEMA_VERSION = 2;
+const SCORE_KEYS = [
+  "regulatory_compliance",
+  "ingredient_safety",
+  "nutritional_quality",
+  "certification_credibility",
+  "heritage_authenticity",
+  "transparency",
+  "traceability_confidence",
+];
+const SCORE_DETAIL_KEY_MAP = {
+  RegulatoryComplianceScore: "regulatory_compliance",
+  IngredientSafetyScore: "ingredient_safety",
+  NutritionalQualityScore: "nutritional_quality",
+  CertificationCredibilityScore: "certification_credibility",
+  HeritageAuthenticityScore: "heritage_authenticity",
+  TransparencyScore: "transparency",
+  TraceabilityConfidenceScore: "traceability_confidence",
+};
+
+function isFiniteScore(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasCompleteEvidenceScores(scores) {
+  return Boolean(scores) && SCORE_KEYS.every((key) => isFiniteScore(scores[key]));
+}
+
+function isCompleteProductScore(product) {
+  return Boolean(product) && isFiniteScore(product.waspas) && hasCompleteEvidenceScores(product.scores);
+}
+
+function scoreLabel(value) {
+  return isFiniteScore(value) ? `${Math.round(value)}/100` : "No Data";
+}
+
+function scoreWidth(value) {
+  return isFiniteScore(value) ? `${Math.max(0, Math.min(100, value))}%` : "0%";
+}
+
+function scoreDisplayColor(value) {
+  return isFiniteScore(value) ? scoreColor(value) : GREEN_MUTED;
+}
+
+function normalizeScores(scores, scoreDetails) {
+  const normalized = {};
+
+  SCORE_KEYS.forEach((key) => {
+    if (isFiniteScore(scores?.[key])) normalized[key] = scores[key];
+  });
+
+  Object.entries(SCORE_DETAIL_KEY_MAP).forEach(([detailKey, scoreKey]) => {
+    const detailScore = scoreDetails?.[detailKey]?.score;
+    if (!isFiniteScore(normalized[scoreKey]) && isFiniteScore(detailScore)) {
+      normalized[scoreKey] = detailScore;
+    }
+  });
+
+  return normalized;
+}
+
+function productFromApi(data, barcode) {
+  const scores = normalizeScores(data.scores, data.score_details);
+  const compositeScore = isFiniteScore(data.score) ? data.score : null;
+
+  return {
+    schema_version: PRODUCT_SCHEMA_VERSION,
+    score_schema_version: data.score_schema_version || null,
+    barcode,
+    name: data.name,
+    brand: data.brand,
+    category: data.identity?.category || "Scanned Product",
+    scores,
+    score_details: data.score_details,
+    evidence_graph: data.evidence_graph,
+    confidence: data.confidence,
+    waspas: compositeScore,
+    composite: compositeScore,
+    risk: data.greenwashing?.risk || "Unknown",
+    longevity: data.longevity || null,
+    greenwashing: data.greenwashing,
+    heritageFacts: [],
+    dataSources: data.data_sources,
+  };
+}
+
+function migrateProduct(product) {
+  if (!product || typeof product !== "object") return null;
+
+  const scores = normalizeScores(product.scores, product.score_details);
+  const compositeScore = isFiniteScore(product.waspas)
+    ? product.waspas
+    : isFiniteScore(product.composite)
+      ? product.composite
+      : isFiniteScore(product.score)
+        ? product.score
+        : null;
+
+  const migrated = {
+    ...product,
+    schema_version: PRODUCT_SCHEMA_VERSION,
+    scores,
+    waspas: compositeScore,
+    composite: compositeScore,
+  };
+
+  return isCompleteProductScore(migrated) ? migrated : null;
+}
+
+function parseStoredProducts(raw) {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    const records = Array.isArray(parsed) ? parsed : parsed?.products;
+    if (!Array.isArray(records)) return [];
+    return records.map(migrateProduct).filter(Boolean).slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function loadStoredProducts() {
+  LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  const products = parseStoredProducts(localStorage.getItem(STORAGE_KEY));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ schema_version: PRODUCT_SCHEMA_VERSION, products })
+  );
+  return products;
+}
+
+function persistProducts(products) {
+  const storedProducts = products.map(migrateProduct).filter(Boolean).slice(0, 12);
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ schema_version: PRODUCT_SCHEMA_VERSION, products: storedProducts })
+  );
+}
 
 function scoreColor(v) {
   if (v >= 70) return GREEN_ACCENT;
@@ -21,7 +162,16 @@ function riskStyle(risk) {
 }
 
 function cap(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  return str.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function formatDataSources(dataSources) {
+  if (!dataSources) return "";
+  if (typeof dataSources === "string") return dataSources;
+  if (Array.isArray(dataSources)) return dataSources.join(", ");
+  return Object.entries(dataSources)
+    .map(([key, value]) => `${cap(key)}: ${Array.isArray(value) ? value.join(", ") : value}`)
+    .join(" | ");
 }
 
 function LeafIcon() {
@@ -88,6 +238,8 @@ function ProductCard({ p, isActive, offset, onClick }) {
   const opacity = isActive ? 1 : 0.55 - absOff * 0.1;
   const rotate = offset * 4;
   const rs = riskStyle(p.risk);
+  const scoreValue = isFiniteScore(p.waspas) ? p.waspas : p.composite;
+  const dataSourceText = formatDataSources(p.dataSources);
 
   return (
     <div
@@ -110,7 +262,7 @@ function ProductCard({ p, isActive, offset, onClick }) {
       {/* Score circle */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 18 }}>
         <div style={{ width: 64, height: 64, borderRadius: "50%", background: GREEN_MID, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-          <span style={{ color: "#fff", fontSize: 22, fontWeight: 600 }}>{p.waspas || p.composite}</span>
+          <span style={{ color: "#fff", fontSize: isFiniteScore(scoreValue) ? 22 : 12, fontWeight: 600 }}>{isFiniteScore(scoreValue) ? Math.round(scoreValue) : "No Data"}</span>
         </div>
         <div style={{ fontSize: 17, fontWeight: 600, color: "#0d3d22", marginBottom: 3, textAlign: "center", letterSpacing: "-0.2px" }}>{p.name}</div>
         <div style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 2, fontWeight: 500 }}>{p.brand}</div>
@@ -118,17 +270,20 @@ function ProductCard({ p, isActive, offset, onClick }) {
       </div>
 
       {/* Score bars */}
-      {Object.entries(p.scores).map(([key, val]) => (
+      {SCORE_KEYS.map((key) => {
+        const val = p.scores?.[key];
+        return (
         <div key={key} style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
             <span style={{ fontSize: 12, color: "#3a5a3a", fontWeight: 500 }}>{cap(key)}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: scoreColor(val) }}>{val}/100</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: scoreDisplayColor(val) }}>{scoreLabel(val)}</span>
           </div>
           <div style={{ height: 5, background: "#e0ede0", borderRadius: 3 }}>
-            <div style={{ height: 5, width: `${val}%`, background: scoreColor(val), borderRadius: 3, transition: "width 0.6s ease" }} />
+            <div style={{ height: 5, width: scoreWidth(val), background: scoreDisplayColor(val), borderRadius: 3, transition: "width 0.6s ease" }} />
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {/* Bottom badges */}
       <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
@@ -157,8 +312,8 @@ function ProductCard({ p, isActive, offset, onClick }) {
         </div>
       )}
 
-      {p.dataSources && (
-        <div style={{ marginTop: 10, fontSize: 10, color: "#8aa48f", textAlign: "center" }}>Data: {p.dataSources}</div>
+      {dataSourceText && (
+        <div style={{ marginTop: 10, fontSize: 10, color: "#8aa48f", textAlign: "center" }}>Data: {dataSourceText}</div>
       )}
     </div>
   );
@@ -207,7 +362,8 @@ function CardCarousel({ products }) {
 
 function HomePage({ products }) {
   const scans = products.length;
-  const averageScore = scans ? Math.round(products.reduce((sum, p) => sum + (p.waspas || 0), 0) / scans) : null;
+  const scoredProducts = products.filter(isCompleteProductScore);
+  const averageScore = scoredProducts.length ? Math.round(scoredProducts.reduce((sum, p) => sum + p.waspas, 0) / scoredProducts.length) : null;
   const heritageMatches = products.reduce((sum, p) => sum + (p.heritageFacts?.length || 0), 0);
   const lowRisk = products.filter((p) => p.risk === "Low").length;
   return (
@@ -217,7 +373,7 @@ function HomePage({ products }) {
         Know what's <em style={{ color: GREEN_ACCENT, fontStyle: "italic", fontWeight: 400 }}>really</em><br />in your basket
       </h1>
       <p style={{ fontSize: 16, color: "#5a7a6a", lineHeight: 1.8, maxWidth: 560, marginBottom: 48, fontWeight: 400 }}>
-        Discover the truth behind everyday products with comprehensive sustainability, health, and transparency ratings — powered by verified data.
+        Identify products from barcode databases, then score ingredients from regulator and standards evidence.
       </p>
 
       <div style={{ marginBottom: 24 }}>
@@ -253,47 +409,18 @@ function SearchPage({ onProductLookup }) {
   const [loading, setLoading] = useState(false);
   const [resultProducts, setResultProducts] = useState([]);
   const [error, setError] = useState("");
-  const [weights, setWeights] = useState({ sustainability: 0.25, health: 0.25, transparency: 0.25, social: 0.25 });
-
-  const updateWeight = (key, newVal) => {
-    const val = parseFloat(newVal);
-    const others = Object.keys(weights).filter((k) => k !== key);
-    const otherTotal = others.reduce((s, k) => s + weights[k], 0);
-    const remaining = 1 - val;
-    const updated = { ...weights, [key]: val };
-    if (otherTotal > 0) {
-      others.forEach((k) => { updated[k] = parseFloat(((weights[k] / otherTotal) * remaining).toFixed(2)); });
-    } else {
-      others.forEach((k) => { updated[k] = parseFloat((remaining / 3).toFixed(2)); });
-    }
-    setWeights(updated);
-  };
 
   const search = async () => {
     if (!barcode.trim()) return;
     setLoading(true); setError(""); setResultProducts([]);
     try {
-      const w = weights;
-      const res = await fetch(`http://127.0.0.1:8080/product/${barcode.trim()}?w1=${w.sustainability}&w2=${w.health}&w3=${w.transparency}&w4=${w.social}`);
+      const res = await fetch(`http://127.0.0.1:8080/product/${barcode.trim()}`);
       const data = await res.json();
       if (data.error) { setError("Product not found. Try another barcode."); setLoading(false); return; }
 
-      // Format into card format
-      const card = {
-        name: data.name,
-        brand: data.brand,
-        category: "Scanned Product",
-        scores: data.scores,
-        waspas: data.composite,
-        composite: data.composite,
-        risk: data.greenwashing?.risk || "Unknown",
-        longevity: data.longevity || null,
-        greenwashing: data.greenwashing,
-        heritageFacts: data.heritage_facts || [],
-        dataSources: data.data_sources,
-      };
+      const card = productFromApi(data, barcode.trim());
       setResultProducts([card]);
-      onProductLookup({ ...card, barcode: barcode.trim() });
+      onProductLookup(card);
     } catch { setError("Could not connect to server. Make sure your backend is running on port 8080."); }
     setLoading(false);
   };
@@ -302,7 +429,7 @@ function SearchPage({ onProductLookup }) {
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Barcode Search</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>Search a product</h2>
-      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 32, fontWeight: 400, lineHeight: 1.7 }}>Enter a barcode number to look up real-time sustainability, health, and transparency data.</p>
+      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 32, fontWeight: 400, lineHeight: 1.7 }}>Enter a barcode number to look up product identity and regulator-backed ingredient evidence.</p>
 
       {/* Search bar */}
       <div style={{ display: "flex", gap: 12, marginBottom: 32 }}>
@@ -319,27 +446,6 @@ function SearchPage({ onProductLookup }) {
         <button onClick={search} style={{ padding: "14px 28px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: "0.3px" }}>
           Search
         </button>
-      </div>
-
-      {/* Priority sliders */}
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, marginBottom: 32 }}>
-        <div style={{ fontSize: 12, letterSpacing: "2px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 16, fontWeight: 600 }}>Your Priorities</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {Object.entries(weights).map(([key, val]) => (
-            <div key={key}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 13, color: "#0d3d22", fontWeight: 600 }}>{cap(key)}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: GREEN_MID }}>{Math.round(val * 100)}%</span>
-              </div>
-              <input type="range" min="0.05" max="0.85" step="0.01" value={val}
-                onChange={(e) => updateWeight(key, e.target.value)}
-                style={{ width: "100%", accentColor: GREEN_MID }} />
-            </div>
-          ))}
-        </div>
-        <p style={{ fontSize: 12, color: "#a0bfa8", marginTop: 12, fontWeight: 400 }}>
-          Sliders auto-balance to always total 100%. Adjust to reflect what matters most to you.
-        </p>
       </div>
 
       {loading && (
@@ -384,29 +490,14 @@ function ScanPage({ onSwitchToSearch, onProductLookup }) {
  
     try {
       const res = await fetch(
-        `http://127.0.0.1:8080/product/${code}?w1=0.25&w2=0.25&w3=0.25&w4=0.25`
+        `http://127.0.0.1:8080/product/${code}`
       );
       const data = await res.json();
  
       if (data.error) {
         setError("Product not found in any database.");
       } else {
-        // Shape the API response into the same card format used by SearchPage
-        // and CardCarousel so the exact same ProductCard renders here.
-        const card = {
-          name:       data.name,
-          brand:      data.brand,
-          category:   "Scanned Product",
-          scores:     data.scores,
-          waspas:     data.composite,
-          composite:  data.composite,
-          risk:       data.greenwashing?.risk || "Unknown",
-          longevity:  data.longevity || null,
-          greenwashing: data.greenwashing,
-          heritageFacts: data.heritage_facts || [],
-          dataSources: data.data_sources,
-          barcode: code,
-        };
+        const card = productFromApi(data, code);
         setResult(card);
         onProductLookup(card);
       }
@@ -434,7 +525,7 @@ function ScanPage({ onSwitchToSearch, onProductLookup }) {
         Scan a product
       </h2>
       <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 40, fontWeight: 400, lineHeight: 1.7 }}>
-        Use your device camera to instantly scan any product barcode and retrieve its sustainability profile.
+        Use your device camera to identify a product and retrieve regulator-backed ingredient evidence.
       </p>
  
       {/* Detected barcode banner — shown as soon as a code is read */}
@@ -518,13 +609,14 @@ function ScanPage({ onSwitchToSearch, onProductLookup }) {
 }
 
 function AnalyticsPage({ products }) {
-  const hasProducts = products.length > 0;
-  const avgScores = ["sustainability", "health", "transparency", "social"].map((key) => ({
+  const analyticsProducts = products.filter(isCompleteProductScore);
+  const hasProducts = analyticsProducts.length > 0;
+  const avgScores = SCORE_KEYS.map((key) => ({
     label: key,
-    avg: hasProducts ? Math.round(products.reduce((s, p) => s + p.scores[key], 0) / products.length) : 0,
+    avg: hasProducts ? Math.round(analyticsProducts.reduce((s, p) => s + p.scores[key], 0) / analyticsProducts.length) : null,
   }));
-  const avgWaspas = hasProducts ? Math.round(products.reduce((s, p) => s + p.waspas, 0) / products.length) : 0;
-  const lowRisk = products.filter((p) => p.risk === "Low").length;
+  const avgWaspas = hasProducts ? Math.round(analyticsProducts.reduce((s, p) => s + p.waspas, 0) / analyticsProducts.length) : null;
+  const lowRisk = analyticsProducts.filter((p) => p.risk === "Low").length;
 
   return (
     <div style={{ padding: "40px 52px" }}>
@@ -533,8 +625,8 @@ function AnalyticsPage({ products }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
         {[
-          { label: "Avg. WASPAS Score", val: avgWaspas, sub: "Across all catalogued products" },
-          { label: "Products Analysed", val: products.length, sub: "Saved in this browser" },
+          { label: "Avg. Evidence Score", val: scoreLabel(avgWaspas), sub: "Across complete evidence lookups" },
+          { label: "Products Analysed", val: analyticsProducts.length, sub: "Complete saved evidence records" },
           { label: "Low Risk Products", val: lowRisk, sub: "Below greenwashing threshold" },
         ].map((c) => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: 24, border: "1px solid #e0ede0" }}>
@@ -547,15 +639,15 @@ function AnalyticsPage({ products }) {
 
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 20 }}>Average Scores by Dimension</div>
-        {!hasProducts && <p style={{ fontSize: 14, color: GREEN_MUTED, marginBottom: 20 }}>No verified lookups yet. Scan or search a barcode to build your personal analytics.</p>}
+        {!hasProducts && <p style={{ fontSize: 14, color: GREEN_MUTED, marginBottom: 20 }}>No complete evidence-engine score records yet. Scan or search a barcode to build your personal analytics.</p>}
         {avgScores.map((s) => (
           <div key={s.label} style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(s.label)}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(s.avg) }}>{s.avg}/100</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: scoreDisplayColor(s.avg) }}>{scoreLabel(s.avg)}</span>
             </div>
             <div style={{ height: 10, background: "#e0ede0", borderRadius: 5 }}>
-              <div style={{ height: 10, width: `${s.avg}%`, background: scoreColor(s.avg), borderRadius: 5 }} />
+              <div style={{ height: 10, width: scoreWidth(s.avg), background: scoreDisplayColor(s.avg), borderRadius: 5 }} />
             </div>
           </div>
         ))}
@@ -566,19 +658,19 @@ function AnalyticsPage({ products }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1.5px solid #e0ede0" }}>
-              {["Product", "Brand", "WASPAS", "Risk"].map((h) => (
+              {["Product", "Brand", "Score", "Risk"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: GREEN_MUTED, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {products.map((p, i) => {
+            {analyticsProducts.map((p, i) => {
               const rs = riskStyle(p.risk);
               return (
                 <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
                   <td style={{ padding: "10px 12px", color: "#0d3d22", fontWeight: 500 }}>{p.name}</td>
                   <td style={{ padding: "10px 12px", color: GREEN_MUTED, fontWeight: 400 }}>{p.brand}</td>
-                  <td style={{ padding: "10px 12px", color: GREEN_MID, fontWeight: 600 }}>{p.waspas}</td>
+                  <td style={{ padding: "10px 12px", color: GREEN_MID, fontWeight: 600 }}>{scoreLabel(p.waspas)}</td>
                   <td style={{ padding: "10px 12px" }}>
                     <span style={{ background: rs.bg, color: rs.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{p.risk}</span>
                   </td>
@@ -595,10 +687,10 @@ function AnalyticsPage({ products }) {
 
 function AboutPage() {
   const pillars = [
-    { title: "Sustainability", desc: "Environmental impact, carbon footprint, packaging and supply chain eco-scores sourced from Open Food Facts and verified eco-score databases." },
-    { title: "Health & Safety", desc: "Nutritional data, additives and NutriScore ratings from verified food databases, mapped to a clear 0–100 health index." },
-    { title: "Transparency", desc: "Ingredient completeness, label certification count and traceability scoring — rewarding brands that clearly show their workings." },
-    { title: "Social Impact", desc: "Fair trade certification, ethical sourcing and manufacturing origin data aggregated from public brand disclosures and third-party audits." },
+    { title: "Product Identity", desc: "Open Food Facts and Open Beauty Facts identify the product, manufacturer, category, and ingredient text only." },
+    { title: "Regulatory Evidence", desc: "EFSA, FDA, Codex, FSSAI, REACH, CDSCO, AYUSH, NIN, and GS1 evidence records evaluate ingredients and traceability." },
+    { title: "Evidence Graph", desc: "Every score contribution is stored as an ingredient, source, regulation, confidence, and contribution chain." },
+    { title: "Confidence", desc: "Missing evidence reduces confidence without automatically treating unknown ingredients as unsafe." },
   ];
 
   return (
@@ -606,7 +698,7 @@ function AboutPage() {
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>About ClarityX</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 16, letterSpacing: "-0.5px" }}>The platform behind the scores</h2>
       <p style={{ fontSize: 15, color: "#5a7a6a", lineHeight: 1.8, maxWidth: 600, marginBottom: 48, fontWeight: 400 }}>
-        ClarityX cross-references the Open Food Facts database — covering over 3 million products — with eco-score indexes, nutritional databases, and social responsibility disclosures to produce a single weighted composite score for any barcoded product.
+        ClarityX uses identity databases to identify products and regulator-backed evidence to evaluate ingredients. Scores are generated from auditable evidence graph records, not brand reputation or packaging claims.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
@@ -622,9 +714,9 @@ function AboutPage() {
       </div>
 
       <div style={{ background: GREEN_DARK, borderRadius: 16, padding: 32, color: "#fff" }}>
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, letterSpacing: "-0.3px" }}>WASPAS Scoring Method</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, letterSpacing: "-0.3px" }}>Evidence Scoring Method</div>
         <p style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", lineHeight: 1.8, fontWeight: 400 }}>
-          The Weighted Aggregated Sum Product Assessment (WASPAS) combines a Weighted Sum Model (WSM) and a Weighted Product Model (WPM) with equal weighting (λ = 0.5). This hybrid approach is more reliable than either method alone, balancing additive and multiplicative relationships between sustainability criteria.
+          Each score consumes only evidence graph data. Unknown provider results are preserved as UNKNOWN and affect confidence, not automatic safety conclusions.
         </p>
       </div>
     </div>
@@ -662,16 +754,16 @@ function Sidebar({ active, onNavigate }) {
 
 export default function App() {
   const [page, setPage] = useState("home");
-  const [products, setProducts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("clarityx-lookups")) || []; } catch { return []; }
-  });
+  const [products, setProducts] = useState(loadStoredProducts);
 
   useEffect(() => {
-    localStorage.setItem("clarityx-lookups", JSON.stringify(products.slice(0, 12)));
+    persistProducts(products);
   }, [products]);
 
   const recordProduct = (product) => {
-    setProducts((current) => [product, ...current.filter((item) => item.barcode !== product.barcode)].slice(0, 12));
+    const normalized = migrateProduct(product);
+    if (!normalized) return;
+    setProducts((current) => [normalized, ...current.filter((item) => item.barcode !== normalized.barcode)].slice(0, 12));
   };
 
   const pages = {
@@ -688,7 +780,7 @@ export default function App() {
       <main style={{ flex: 1, overflowY: "auto", minHeight: "100vh" }}>
         {pages[page]}
         <footer style={{ padding: "24px 52px 32px", color: "#668363", fontSize: 12, lineHeight: 1.6 }}>
-          <strong style={{ color: "#31562d" }}>How ClarityX works:</strong> Product details come from Open Food Facts, Open Beauty Facts, UPCitemdb, Go-UPC, and—when a medicine name matches—OpenFDA. Scores combine the visible ingredient list, packaging, labels, and brand signals using the weights you choose. We do not publish customer reviews; the current longevity signal is a prototype and should not be treated as a verified review score. Heritage notes describe traditional use only, not medical advice.
+          <strong style={{ color: "#31562d" }}>How ClarityX works:</strong> Open Food Facts and Open Beauty Facts identify products only. Regulatory and standards providers evaluate ingredients, persist evidence graph records, and produce auditable scores. Heritage notes describe identity and references only, not efficacy or medical claims.
         </footer>
       </main>
     </div>

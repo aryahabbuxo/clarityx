@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fda-food-substances-local-reference-2026-06"
+    },
+    "evidence_type": "regulatory",
+    "ingredient": "sodium cocoate",
+    "references": [
+      "https://open.fda.gov/apis/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:10:23.328195+00:00",
+    "source": "FDA",
+    "status": "UNKNOWN"
+  },
+  "provider": "FDA",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fda-food-substances-local-reference-2026-06"
+    },
+    "evidence_type": "regulatory",
+    "ingredient": "sodium cocoate",
+    "references": [
+      "https://open.fda.gov/apis/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:10:23.328195+00:00",
+    "source": "FDA",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:10:23.329193+00:00",
+  "version": "fda-food-substances-local-reference-2026-06"
+}

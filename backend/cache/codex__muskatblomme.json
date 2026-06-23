@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "codex-gsfa-local-reference-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "muskatblomme*",
+    "references": [
+      "https://www.fao.org/fao-who-codexalimentarius/en/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.700582+00:00",
+    "source": "Codex",
+    "status": "UNKNOWN"
+  },
+  "provider": "Codex",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "codex-gsfa-local-reference-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "muskatblomme*",
+    "references": [
+      "https://www.fao.org/fao-who-codexalimentarius/en/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.700582+00:00",
+    "source": "Codex",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.724160+00:00",
+  "version": "codex-gsfa-local-reference-2026-06"
+}

@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "reach-local-reference-2026-06"
+    },
+    "evidence_type": "cosmetic_safety",
+    "ingredient": "kakaoskall*",
+    "references": [
+      "https://echa.europa.eu/information-on-chemicals"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.732163+00:00",
+    "source": "REACH",
+    "status": "UNKNOWN"
+  },
+  "provider": "REACH",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "reach-local-reference-2026-06"
+    },
+    "evidence_type": "cosmetic_safety",
+    "ingredient": "kakaoskall*",
+    "references": [
+      "https://echa.europa.eu/information-on-chemicals"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.732163+00:00",
+    "source": "REACH",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.734159+00:00",
+  "version": "reach-local-reference-2026-06"
+}

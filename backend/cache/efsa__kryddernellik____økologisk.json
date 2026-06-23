@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "openfoodtox-local-reference-2026-06"
+    },
+    "evidence_type": "food_safety",
+    "ingredient": "kryddernellik*. *\u00f8kologisk",
+    "references": [
+      "https://www.efsa.europa.eu/en/data-report/chemical-hazards-database-openfoodtox"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.738161+00:00",
+    "source": "EFSA",
+    "status": "UNKNOWN"
+  },
+  "provider": "EFSA",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "openfoodtox-local-reference-2026-06"
+    },
+    "evidence_type": "food_safety",
+    "ingredient": "kryddernellik*. *\u00f8kologisk",
+    "references": [
+      "https://www.efsa.europa.eu/en/data-report/chemical-hazards-database-openfoodtox"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.738161+00:00",
+    "source": "EFSA",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.739158+00:00",
+  "version": "openfoodtox-local-reference-2026-06"
+}

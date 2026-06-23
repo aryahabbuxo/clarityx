@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "kardemomme*",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.657512+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "provider": "FSSAI",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "kardemomme*",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.657512+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.659507+00:00",
+  "version": "fssai-additive-compliance-local-v1-2026-06"
+}

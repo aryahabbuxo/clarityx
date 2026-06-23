@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "ayush-heritage-local-reference-v1-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "3%",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.668044+00:00",
+    "source": "AYUSH",
+    "status": "UNKNOWN"
+  },
+  "provider": "AYUSH",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "ayush-heritage-local-reference-v1-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "3%",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.668044+00:00",
+    "source": "AYUSH",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.670056+00:00",
+  "version": "ayush-heritage-local-reference-v1-2026-06"
+}

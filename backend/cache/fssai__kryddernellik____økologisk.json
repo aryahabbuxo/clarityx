@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "kryddernellik*. *\u00f8kologisk",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.740160+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "provider": "FSSAI",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "kryddernellik*. *\u00f8kologisk",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.740160+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.742158+00:00",
+  "version": "fssai-additive-compliance-local-v1-2026-06"
+}

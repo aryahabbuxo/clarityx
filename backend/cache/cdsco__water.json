@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.66,
+    "details": {
+      "version": "cdsco-cosmetic-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "water",
+    "references": [
+      "https://cdsco.gov.in/"
+    ],
+    "regulation": "Indian cosmetic compliance local table",
+    "retrieved_at": "2026-06-23T05:10:23.348221+00:00",
+    "source": "CDSCO",
+    "status": "COMPLIANT"
+  },
+  "provider": "CDSCO",
+  "raw_response": {
+    "confidence": 0.66,
+    "details": {
+      "version": "cdsco-cosmetic-compliance-local-v1-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "water",
+    "references": [
+      "https://cdsco.gov.in/"
+    ],
+    "regulation": "Indian cosmetic compliance local table",
+    "retrieved_at": "2026-06-23T05:10:23.348221+00:00",
+    "source": "CDSCO",
+    "status": "COMPLIANT"
+  },
+  "timestamp": "2026-06-23T05:10:23.361484+00:00",
+  "version": "cdsco-cosmetic-compliance-local-v1-2026-06"
+}
