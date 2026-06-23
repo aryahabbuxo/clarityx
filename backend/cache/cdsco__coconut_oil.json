@@ -1,35 +1,37 @@
 {
   "normalized_response": {
-    "confidence": 0.2,
+    "confidence": 0.72,
     "details": {
+      "botanical_identity": "Cocos nucifera",
       "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
     },
     "evidence_type": "compliance",
-    "ingredient": "moroccan lava clay",
+    "ingredient": "coconut oil",
     "references": [
       "https://cdsco.gov.in/"
     ],
-    "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:44:08.756894+00:00",
+    "regulation": "Indian cosmetic compliance local table",
+    "retrieved_at": "2026-06-23T05:44:08.721477+00:00",
     "source": "CDSCO",
-    "status": "UNKNOWN"
+    "status": "COMPLIANT"
   },
   "provider": "CDSCO",
   "raw_response": {
-    "confidence": 0.2,
+    "confidence": 0.72,
     "details": {
+      "botanical_identity": "Cocos nucifera",
       "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
     },
     "evidence_type": "compliance",
-    "ingredient": "moroccan lava clay",
+    "ingredient": "coconut oil",
     "references": [
       "https://cdsco.gov.in/"
     ],
-    "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:44:08.756894+00:00",
+    "regulation": "Indian cosmetic compliance local table",
+    "retrieved_at": "2026-06-23T05:44:08.721477+00:00",
     "source": "CDSCO",
-    "status": "UNKNOWN"
+    "status": "COMPLIANT"
   },
-  "timestamp": "2026-06-23T05:44:08.757907+00:00",
+  "timestamp": "2026-06-23T05:44:08.732889+00:00",
   "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
 }

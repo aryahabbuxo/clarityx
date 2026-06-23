@@ -90,7 +90,7 @@ function productFromApi(data, barcode) {
     risk: data.greenwashing?.risk || "Unknown",
     longevity: data.longevity || null,
     greenwashing: data.greenwashing,
-    heritageFacts: [],
+    heritageFacts: data.heritage_facts || [],
     dataSources: data.data_sources,
   };
 }

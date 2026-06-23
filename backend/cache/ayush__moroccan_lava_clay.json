@@ -2,7 +2,7 @@
   "normalized_response": {
     "confidence": 0.2,
     "details": {
-      "version": "ayush-heritage-local-reference-v1-2026-06"
+      "version": "ayush-heritage-local-reference-v2-2026-06"
     },
     "evidence_type": "heritage",
     "ingredient": "moroccan lava clay",
@@ -10,7 +10,7 @@
       "https://www.ayush.gov.in/"
     ],
     "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:10:23.388518+00:00",
+    "retrieved_at": "2026-06-23T05:44:08.754926+00:00",
     "source": "AYUSH",
     "status": "UNKNOWN"
   },
@@ -18,7 +18,7 @@
   "raw_response": {
     "confidence": 0.2,
     "details": {
-      "version": "ayush-heritage-local-reference-v1-2026-06"
+      "version": "ayush-heritage-local-reference-v2-2026-06"
     },
     "evidence_type": "heritage",
     "ingredient": "moroccan lava clay",
@@ -26,10 +26,10 @@
       "https://www.ayush.gov.in/"
     ],
     "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:10:23.388518+00:00",
+    "retrieved_at": "2026-06-23T05:44:08.754926+00:00",
     "source": "AYUSH",
     "status": "UNKNOWN"
   },
-  "timestamp": "2026-06-23T05:10:23.390346+00:00",
-  "version": "ayush-heritage-local-reference-v1-2026-06"
+  "timestamp": "2026-06-23T05:44:08.756894+00:00",
+  "version": "ayush-heritage-local-reference-v2-2026-06"
 }

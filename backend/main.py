@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from evidence_engine import EvidenceEngine
 from greenwashing import greenwashing_risk
+from heritage import heritage_ingredients_from_matches, heritage_matches
 from ingredient_resolver import resolve_ingredients
 from product_data import get_product_identity
 from providers.gs1_provider import Gs1Provider
@@ -31,7 +32,13 @@ def product(barcode: str):
     if not identity:
         return {"error": "Product not found"}
 
+    heritage = heritage_matches(identity.get("product_name", ""), identity.get("ingredients", ""))
     canonical_ingredients = resolve_ingredients(identity.get("ingredients", ""))
+    seen_ingredients = {ingredient.canonical_name for ingredient in canonical_ingredients}
+    for ingredient in heritage_ingredients_from_matches(heritage):
+        if ingredient.canonical_name not in seen_ingredients:
+            canonical_ingredients.append(ingredient)
+            seen_ingredients.add(ingredient.canonical_name)
     gs1 = Gs1Provider().verify(barcode, identity.get("manufacturer", ""))
     graph = EvidenceEngine().build_graph(
         product_id=barcode,
@@ -73,6 +80,7 @@ def product(barcode: str):
             "source": gs1["source"],
         },
         "greenwashing": greenwashing,
+        "heritage_facts": heritage,
         "data_sources": {
             "identity": identity["source"],
             "evidence": ["EFSA", "FDA", "Codex", "FSSAI", "REACH", "CDSCO", "AYUSH", "NIN", "GS1"],

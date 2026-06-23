@@ -74,7 +74,13 @@ class RegulatoryProvider:
             return None
         try:
             with path.open("r", encoding="utf-8") as handle:
-                return json.load(handle)
+                data = json.load(handle)
+            # Invalidate cache if the dataset version has changed — ensures that
+            # expanding a provider's DATA dict takes effect immediately without
+            # requiring manual cache purges.
+            if data.get("version") != self.dataset_version:
+                return None
+            return data
         except (OSError, json.JSONDecodeError):
             return None
 
@@ -89,4 +95,3 @@ class RegulatoryProvider:
         }
         with path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
-

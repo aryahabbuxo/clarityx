@@ -5,12 +5,12 @@
       "version": "fssai-additive-compliance-local-v2-2026-06"
     },
     "evidence_type": "compliance",
-    "ingredient": "moroccan lava clay",
+    "ingredient": "shikakai",
     "references": [
       "https://www.fssai.gov.in/"
     ],
     "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:44:08.758936+00:00",
+    "retrieved_at": "2026-06-23T05:44:08.741896+00:00",
     "source": "FSSAI",
     "status": "UNKNOWN"
   },
@@ -21,15 +21,15 @@
       "version": "fssai-additive-compliance-local-v2-2026-06"
     },
     "evidence_type": "compliance",
-    "ingredient": "moroccan lava clay",
+    "ingredient": "shikakai",
     "references": [
       "https://www.fssai.gov.in/"
     ],
     "regulation": "No matching regulator record",
-    "retrieved_at": "2026-06-23T05:44:08.758936+00:00",
+    "retrieved_at": "2026-06-23T05:44:08.741896+00:00",
     "source": "FSSAI",
     "status": "UNKNOWN"
   },
-  "timestamp": "2026-06-23T05:44:08.758936+00:00",
+  "timestamp": "2026-06-23T05:44:08.745904+00:00",
   "version": "fssai-additive-compliance-local-v2-2026-06"
 }
