@@ -29,6 +29,49 @@ const SCORE_DETAIL_KEY_MAP = {
   TraceabilityConfidenceScore: "traceability_confidence",
 };
 
+// ── WASPAS ────────────────────────────────────────────────────────────────────
+// Weighted Aggregated Sum Product Assessment
+// WASPAS = λ·WSM + (1-λ)·WPM
+// WSM  = Σ wᵢ·xᵢ          (weighted sum model, linear)
+// WPM  = Π xᵢ^wᵢ          (weighted product model, multiplicative)
+// Scores are normalised to [0,1] before applying the formula, then scaled
+// back to [0,100] so the result stays on the same display scale.
+
+const DEFAULT_WEIGHTS = {
+  regulatory_compliance:    0.20,
+  ingredient_safety:        0.25,
+  nutritional_quality:      0.15,
+  certification_credibility:0.10,
+  heritage_authenticity:    0.10,
+  transparency:             0.10,
+  traceability_confidence:  0.10,
+};
+const DEFAULT_LAMBDA = 0.5; // equal blend of WSM and WPM
+
+function computeWaspas(scores, weights, lambda) {
+  // Guard: need all 7 keys to be finite numbers
+  if (!scores || !SCORE_KEYS.every((k) => isFiniteScore(scores[k]))) return null;
+
+  // Normalise weights so they always sum to 1 (handles slider drift)
+  const total = SCORE_KEYS.reduce((s, k) => s + (weights[k] ?? 0), 0);
+  if (total === 0) return null;
+  const w = {};
+  SCORE_KEYS.forEach((k) => { w[k] = (weights[k] ?? 0) / total; });
+
+  // Normalise scores to [0,1]
+  const x = {};
+  SCORE_KEYS.forEach((k) => { x[k] = Math.max(0, Math.min(100, scores[k])) / 100; });
+
+  // WSM
+  const wsm = SCORE_KEYS.reduce((s, k) => s + w[k] * x[k], 0);
+
+  // WPM — avoid Math.pow(0, w) = 0 killing the whole product; floor at tiny epsilon
+  const EPS = 1e-6;
+  const wpm = SCORE_KEYS.reduce((prod, k) => prod * Math.pow(Math.max(x[k], EPS), w[k]), 1);
+
+  return Math.round((lambda * wsm + (1 - lambda) * wpm) * 100 * 10) / 10; // one decimal, 0-100 scale
+}
+
 function isFiniteScore(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -72,7 +115,7 @@ function normalizeScores(scores, scoreDetails) {
 
 function productFromApi(data, barcode) {
   const scores = normalizeScores(data.scores, data.score_details);
-  const compositeScore = isFiniteScore(data.score) ? data.score : null;
+  const waspas = computeWaspas(scores, DEFAULT_WEIGHTS, DEFAULT_LAMBDA);
 
   return {
     schema_version: PRODUCT_SCHEMA_VERSION,
@@ -85,8 +128,8 @@ function productFromApi(data, barcode) {
     score_details: data.score_details,
     evidence_graph: data.evidence_graph,
     confidence: data.confidence,
-    waspas: compositeScore,
-    composite: compositeScore,
+    waspas,
+    composite: waspas,
     risk: data.greenwashing?.risk || "Unknown",
     longevity: data.longevity || null,
     greenwashing: data.greenwashing,
@@ -107,12 +150,15 @@ function migrateProduct(product) {
         ? product.score
         : null;
 
+  // Recompute with WASPAS if we have full scores; fall back to stored value if not
+  const waspas = computeWaspas(scores, DEFAULT_WEIGHTS, DEFAULT_LAMBDA) ?? compositeScore;
+
   const migrated = {
     ...product,
     schema_version: PRODUCT_SCHEMA_VERSION,
     scores,
-    waspas: compositeScore,
-    composite: compositeScore,
+    waspas,
+    composite: waspas,
     heritageFacts: Array.isArray(product.heritageFacts) ? product.heritageFacts : [],
   };
 
@@ -612,21 +658,41 @@ function ScanPage({ onSwitchToSearch, onProductLookup }) {
 function AnalyticsPage({ products }) {
   const analyticsProducts = products.filter(isCompleteProductScore);
   const hasProducts = analyticsProducts.length > 0;
+
+  // ── WASPAS controls ─────────────────────────────────────────────────────────
+  const [weights, setWeights] = useState({ ...DEFAULT_WEIGHTS });
+  const [lambda, setLambda] = useState(DEFAULT_LAMBDA);
+
+  const weightTotal = SCORE_KEYS.reduce((s, k) => s + weights[k], 0);
+  const setWeight = (key, raw) => setWeights((prev) => ({ ...prev, [key]: Math.round(raw * 100) / 100 }));
+  const resetWeights = () => { setWeights({ ...DEFAULT_WEIGHTS }); setLambda(DEFAULT_LAMBDA); };
+
+  // Live WASPAS score for each product under the current weights/lambda
+  const liveWaspas = (p) => computeWaspas(p.scores, weights, lambda);
+
+  // Averages using live weights
   const avgScores = SCORE_KEYS.map((key) => ({
     label: key,
-    avg: hasProducts ? Math.round(analyticsProducts.reduce((s, p) => s + p.scores[key], 0) / analyticsProducts.length) : null,
+    avg: hasProducts ? analyticsProducts.reduce((s, p) => s + p.scores[key], 0) / analyticsProducts.length : null,
   }));
-  const avgWaspas = hasProducts ? Math.round(analyticsProducts.reduce((s, p) => s + p.waspas, 0) / analyticsProducts.length) : null;
+  const avgWaspas = hasProducts
+    ? analyticsProducts.reduce((s, p) => s + (liveWaspas(p) ?? 0), 0) / analyticsProducts.length
+    : null;
   const lowRisk = analyticsProducts.filter((p) => p.risk === "Low").length;
+
+  const sliderStyle = {
+    width: "100%", accentColor: GREEN_MID, cursor: "pointer", height: 4,
+  };
 
   return (
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Platform Insights</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 32, letterSpacing: "-0.5px" }}>Analytics Overview</h2>
 
+      {/* Summary tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
         {[
-          { label: "Avg. Evidence Score", val: scoreLabel(avgWaspas), sub: "Across complete evidence lookups" },
+          { label: "Avg. WASPAS Score", val: isFiniteScore(avgWaspas) ? `${Math.round(avgWaspas * 10) / 10}/100` : "—", sub: "Live — updates with your weights" },
           { label: "Products Analysed", val: analyticsProducts.length, sub: "Complete saved evidence records" },
           { label: "Low Risk Products", val: lowRisk, sub: "Below greenwashing threshold" },
         ].map((c) => (
@@ -638,46 +704,119 @@ function AnalyticsPage({ products }) {
         ))}
       </div>
 
+      {/* ── WASPAS weight controls ── */}
+      <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#0d3d22" }}>WASPAS Weight Controls</span>
+            <span style={{ fontSize: 12, color: GREEN_MUTED, marginLeft: 10 }}>
+              Weights sum: <strong style={{ color: Math.abs(weightTotal - 1) > 0.005 ? "#b83232" : GREEN_MID }}>{(weightTotal * 100).toFixed(0)}%</strong>
+              <span style={{ marginLeft: 6, color: "#a0bfa8" }}>(normalised automatically)</span>
+            </span>
+          </div>
+          <button onClick={resetWeights} style={{ fontSize: 11, color: GREEN_MUTED, background: "none", border: `1px solid #c5dfc5`, borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontWeight: 600 }}>
+            Reset defaults
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: "#8abf9a", marginBottom: 20, lineHeight: 1.6 }}>
+          WASPAS = λ · WSM + (1−λ) · WPM&nbsp;&nbsp;|&nbsp;&nbsp;WSM = weighted sum, WPM = weighted product. Scores update live in the table below.
+        </p>
+
+        {/* λ slider */}
+        <div style={{ marginBottom: 20, padding: "14px 16px", background: "#f5f9f2", borderRadius: 10, border: "1px solid #dceedd" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#0d3d22" }}>λ (lambda) — WSM ↔ WPM blend</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: GREEN_MID }}>{lambda.toFixed(2)}</span>
+          </div>
+          <input type="range" min={0} max={1} step={0.01} value={lambda}
+            onChange={(e) => setLambda(parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#a0bfa8", marginTop: 4 }}>
+            <span>0 = pure WPM (strict)</span><span>0.5 = balanced</span><span>1 = pure WSM (lenient)</span>
+          </div>
+        </div>
+
+        {/* Dimension weight sliders */}
+        {SCORE_KEYS.map((key) => {
+          const normPct = weightTotal > 0 ? ((weights[key] / weightTotal) * 100).toFixed(1) : "0.0";
+          return (
+            <div key={key} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(key)}</span>
+                <span style={{ fontSize: 12, color: "#a0bfa8" }}>
+                  raw {(weights[key] * 100).toFixed(0)}% &nbsp;·&nbsp;
+                  <strong style={{ color: GREEN_MID }}>effective {normPct}%</strong>
+                </span>
+              </div>
+              <input type="range" min={0} max={1} step={0.01} value={weights[key]}
+                onChange={(e) => setWeight(key, parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Average scores by dimension */}
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 20 }}>Average Scores by Dimension</div>
         {!hasProducts && <p style={{ fontSize: 14, color: GREEN_MUTED, marginBottom: 20 }}>No complete evidence-engine score records yet. Scan or search a barcode to build your personal analytics.</p>}
-        {avgScores.map((s) => (
-          <div key={s.label} style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(s.label)}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: scoreDisplayColor(s.avg) }}>{scoreLabel(s.avg)}</span>
+        {avgScores.map((s) => {
+          const w = weightTotal > 0 ? weights[s.label] / weightTotal : 0;
+          return (
+            <div key={s.label} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(s.label)}</span>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "#a0bfa8" }}>weight {(w * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: scoreDisplayColor(s.avg) }}>{isFiniteScore(s.avg) ? `${Math.round(s.avg)}/100` : "No Data"}</span>
+                </div>
+              </div>
+              <div style={{ height: 10, background: "#e0ede0", borderRadius: 5 }}>
+                <div style={{ height: 10, width: isFiniteScore(s.avg) ? `${Math.max(0, Math.min(100, s.avg))}%` : "0%", background: scoreDisplayColor(s.avg), borderRadius: 5 }} />
+              </div>
             </div>
-            <div style={{ height: 10, background: "#e0ede0", borderRadius: 5 }}>
-              <div style={{ height: 10, width: scoreWidth(s.avg), background: scoreDisplayColor(s.avg), borderRadius: 5 }} />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
+      {/* Product comparison table with live WASPAS */}
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 16 }}>Product Comparison</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 16 }}>
+          Product Comparison
+          <span style={{ fontSize: 12, fontWeight: 400, color: GREEN_MUTED, marginLeft: 10 }}>WASPAS scores update live as you adjust weights</span>
+        </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1.5px solid #e0ede0" }}>
-              {["Product", "Brand", "Score", "Risk"].map((h) => (
+              {["Product", "Brand", "WASPAS Score", "Risk"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: GREEN_MUTED, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {analyticsProducts.map((p, i) => {
-              const rs = riskStyle(p.risk);
-              return (
-                <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
-                  <td style={{ padding: "10px 12px", color: "#0d3d22", fontWeight: 500 }}>{p.name}</td>
-                  <td style={{ padding: "10px 12px", color: GREEN_MUTED, fontWeight: 400 }}>{p.brand}</td>
-                  <td style={{ padding: "10px 12px", color: GREEN_MID, fontWeight: 600 }}>{scoreLabel(p.waspas)}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span style={{ background: rs.bg, color: rs.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{p.risk}</span>
-                  </td>
-                </tr>
-              );
-            })}
+            {analyticsProducts
+              .map((p) => ({ ...p, _live: liveWaspas(p) }))
+              .sort((a, b) => (b._live ?? -1) - (a._live ?? -1))
+              .map((p, i) => {
+                const rs = riskStyle(p.risk);
+                const live = p._live;
+                return (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
+                    <td style={{ padding: "10px 12px", color: "#0d3d22", fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ padding: "10px 12px", color: GREEN_MUTED, fontWeight: 400 }}>{p.brand}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ color: scoreDisplayColor(live), fontWeight: 700, fontSize: 14 }}>
+                        {isFiniteScore(live) ? `${Math.round(live * 10) / 10}/100` : "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ background: rs.bg, color: rs.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{p.risk}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             {!hasProducts && <tr><td colSpan="4" style={{ padding: "18px 12px", color: GREEN_MUTED }}>No products analysed yet.</td></tr>}
           </tbody>
         </table>

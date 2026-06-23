@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "codex-gsfa-local-reference-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "alcohol denat",
+    "references": [
+      "https://www.fao.org/fao-who-codexalimentarius/en/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T06:20:39.912064+00:00",
+    "source": "Codex",
+    "status": "UNKNOWN"
+  },
+  "provider": "Codex",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "codex-gsfa-local-reference-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "alcohol denat",
+    "references": [
+      "https://www.fao.org/fao-who-codexalimentarius/en/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T06:20:39.912064+00:00",
+    "source": "Codex",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T06:20:39.917064+00:00",
+  "version": "codex-gsfa-local-reference-2026-06"
+}
