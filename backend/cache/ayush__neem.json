@@ -1,0 +1,43 @@
+{
+  "normalized_response": {
+    "confidence": 0.85,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "claim_policy": "No efficacy or medical claims generated",
+      "sanskrit_name": "Nimba",
+      "traditional_system": "Ayurveda",
+      "version": "ayush-heritage-local-reference-v2-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "neem",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "Botanical identity heritage reference",
+    "retrieved_at": "2026-06-23T06:19:40.983451+00:00",
+    "source": "AYUSH",
+    "status": "IDENTIFIED"
+  },
+  "provider": "AYUSH",
+  "raw_response": {
+    "confidence": 0.85,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "claim_policy": "No efficacy or medical claims generated",
+      "sanskrit_name": "Nimba",
+      "traditional_system": "Ayurveda",
+      "version": "ayush-heritage-local-reference-v2-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "neem",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "Botanical identity heritage reference",
+    "retrieved_at": "2026-06-23T06:19:40.983451+00:00",
+    "source": "AYUSH",
+    "status": "IDENTIFIED"
+  },
+  "timestamp": "2026-06-23T06:19:40.984468+00:00",
+  "version": "ayush-heritage-local-reference-v2-2026-06"
+}

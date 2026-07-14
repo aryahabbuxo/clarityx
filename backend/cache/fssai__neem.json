@@ -1,0 +1,39 @@
+{
+  "normalized_response": {
+    "confidence": 0.72,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "category": "Botanical",
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "neem",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "FSSAI botanical ingredient standard",
+    "retrieved_at": "2026-06-23T06:19:40.979955+00:00",
+    "source": "FSSAI",
+    "status": "PERMITTED"
+  },
+  "provider": "FSSAI",
+  "raw_response": {
+    "confidence": 0.72,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "category": "Botanical",
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "neem",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "FSSAI botanical ingredient standard",
+    "retrieved_at": "2026-06-23T06:19:40.979955+00:00",
+    "source": "FSSAI",
+    "status": "PERMITTED"
+  },
+  "timestamp": "2026-06-23T06:19:40.980955+00:00",
+  "version": "fssai-additive-compliance-local-v2-2026-06"
+}

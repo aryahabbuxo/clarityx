@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BarcodeScanner from "./BarcodeScanner";
 
 const GREEN_DARK = "#1e3d2f";
@@ -7,22 +7,194 @@ const GREEN_ACCENT = "#3a8a5a";
 const GREEN_LIGHT = "#e8f5e0";
 const GREEN_MUTED = "#6aaa7e";
 const BG = "#f5f6f0";
-
-const CATALOGUE_PRODUCTS = [
-  { name: "Organic Green Tea", brand: "EcoLeaf", category: "Beverages", scores: { sustainability: 92, health: 89, transparency: 84, social: 83 }, waspas: 87, risk: "Low", longevity: "High" },
-  { name: "Reusable Water Bottle", brand: "HydroSave", category: "Lifestyle", scores: { sustainability: 95, health: 88, transparency: 90, social: 91 }, waspas: 85, risk: "Low", longevity: "High" },
-  { name: "Zero Shampoo Bar", brand: "PureRoots", category: "Personal Care", scores: { sustainability: 81, health: 75, transparency: 78, social: 78 }, waspas: 78, risk: "Medium", longevity: "Good" },
-  { name: "Nutella Hazelnut Spread", brand: "Ferrero", category: "Food", scores: { sustainability: 35, health: 65, transparency: 100, social: 50 }, waspas: 62, risk: "Medium", longevity: "Good" },
-  { name: "Ecover Washing Liquid", brand: "Ecover", category: "Household", scores: { sustainability: 91, health: 84, transparency: 79, social: 88 }, waspas: 86, risk: "Low", longevity: "High" },
-  { name: "Tony's Chocolonely Dark", brand: "Tony's", category: "Confectionery", scores: { sustainability: 74, health: 65, transparency: 92, social: 95 }, waspas: 83, risk: "Low", longevity: "Good" },
+const STORAGE_KEY = "clarityx-lookups";
+const LEGACY_STORAGE_KEYS = ["clarityx-products", "clarityx-scans", "clarityx-product-data"];
+const PRODUCT_SCHEMA_VERSION = 3;
+const SCORE_KEYS = [
+  "regulatory_compliance",
+  "ingredient_safety",
+  "nutritional_quality",
+  "certification_credibility",
+  "heritage_authenticity",
+  "transparency",
+  "traceability_confidence",
 ];
+const SCORE_DETAIL_KEY_MAP = {
+  RegulatoryComplianceScore: "regulatory_compliance",
+  IngredientSafetyScore: "ingredient_safety",
+  NutritionalQualityScore: "nutritional_quality",
+  CertificationCredibilityScore: "certification_credibility",
+  HeritageAuthenticityScore: "heritage_authenticity",
+  TransparencyScore: "transparency",
+  TraceabilityConfidenceScore: "traceability_confidence",
+};
 
-const DB_STATS = [
-  { val: "10,000+", label: "Products Verified" },
-  { val: "95%", label: "Accuracy Rate" },
-  { val: "500K+", label: "Scans Performed" },
-  { val: "50+", label: "Partner Brands" },
-];
+// ── WASPAS ────────────────────────────────────────────────────────────────────
+// Weighted Aggregated Sum Product Assessment
+// WASPAS = λ·WSM + (1-λ)·WPM
+// WSM  = Σ wᵢ·xᵢ          (weighted sum model, linear)
+// WPM  = Π xᵢ^wᵢ          (weighted product model, multiplicative)
+// Scores are normalised to [0,1] before applying the formula, then scaled
+// back to [0,100] so the result stays on the same display scale.
+
+const DEFAULT_WEIGHTS = {
+  regulatory_compliance:    0.20,
+  ingredient_safety:        0.25,
+  nutritional_quality:      0.15,
+  certification_credibility:0.10,
+  heritage_authenticity:    0.10,
+  transparency:             0.10,
+  traceability_confidence:  0.10,
+};
+const DEFAULT_LAMBDA = 0.5; // equal blend of WSM and WPM
+
+function computeWaspas(scores, weights, lambda) {
+  // Guard: need all 7 keys to be finite numbers
+  if (!scores || !SCORE_KEYS.every((k) => isFiniteScore(scores[k]))) return null;
+
+  // Normalise weights so they always sum to 1 (handles slider drift)
+  const total = SCORE_KEYS.reduce((s, k) => s + (weights[k] ?? 0), 0);
+  if (total === 0) return null;
+  const w = {};
+  SCORE_KEYS.forEach((k) => { w[k] = (weights[k] ?? 0) / total; });
+
+  // Normalise scores to [0,1]
+  const x = {};
+  SCORE_KEYS.forEach((k) => { x[k] = Math.max(0, Math.min(100, scores[k])) / 100; });
+
+  // WSM
+  const wsm = SCORE_KEYS.reduce((s, k) => s + w[k] * x[k], 0);
+
+  // WPM — avoid Math.pow(0, w) = 0 killing the whole product; floor at tiny epsilon
+  const EPS = 1e-6;
+  const wpm = SCORE_KEYS.reduce((prod, k) => prod * Math.pow(Math.max(x[k], EPS), w[k]), 1);
+
+  return Math.round((lambda * wsm + (1 - lambda) * wpm) * 100 * 10) / 10; // one decimal, 0-100 scale
+}
+
+function isFiniteScore(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasCompleteEvidenceScores(scores) {
+  return Boolean(scores) && SCORE_KEYS.every((key) => isFiniteScore(scores[key]));
+}
+
+function isCompleteProductScore(product) {
+  return Boolean(product) && isFiniteScore(product.waspas) && hasCompleteEvidenceScores(product.scores);
+}
+
+function scoreLabel(value) {
+  return isFiniteScore(value) ? `${Math.round(value)}/100` : "No Data";
+}
+
+function scoreWidth(value) {
+  return isFiniteScore(value) ? `${Math.max(0, Math.min(100, value))}%` : "0%";
+}
+
+function scoreDisplayColor(value) {
+  return isFiniteScore(value) ? scoreColor(value) : GREEN_MUTED;
+}
+
+function normalizeScores(scores, scoreDetails) {
+  const normalized = {};
+
+  SCORE_KEYS.forEach((key) => {
+    if (isFiniteScore(scores?.[key])) normalized[key] = scores[key];
+  });
+
+  Object.entries(SCORE_DETAIL_KEY_MAP).forEach(([detailKey, scoreKey]) => {
+    const detailScore = scoreDetails?.[detailKey]?.score;
+    if (!isFiniteScore(normalized[scoreKey]) && isFiniteScore(detailScore)) {
+      normalized[scoreKey] = detailScore;
+    }
+  });
+
+  return normalized;
+}
+
+function productFromApi(data, barcode) {
+  const scores = normalizeScores(data.scores, data.score_details);
+  const waspas = computeWaspas(scores, DEFAULT_WEIGHTS, DEFAULT_LAMBDA);
+
+  return {
+    schema_version: PRODUCT_SCHEMA_VERSION,
+    score_schema_version: data.score_schema_version || null,
+    barcode,
+    name: data.name,
+    brand: data.brand,
+    category: data.identity?.category || "Scanned Product",
+    scores,
+    score_details: data.score_details,
+    evidence_graph: data.evidence_graph,
+    confidence: data.confidence,
+    waspas,
+    composite: waspas,
+    risk: data.greenwashing?.risk || "Unknown",
+    longevity: data.longevity || null,
+    greenwashing: data.greenwashing,
+    heritageFacts: data.heritage_facts || [],
+    dataSources: data.data_sources,
+  };
+}
+
+function migrateProduct(product) {
+  if (!product || typeof product !== "object") return null;
+
+  const scores = normalizeScores(product.scores, product.score_details);
+  const compositeScore = isFiniteScore(product.waspas)
+    ? product.waspas
+    : isFiniteScore(product.composite)
+      ? product.composite
+      : isFiniteScore(product.score)
+        ? product.score
+        : null;
+
+  // Recompute with WASPAS if we have full scores; fall back to stored value if not
+  const waspas = computeWaspas(scores, DEFAULT_WEIGHTS, DEFAULT_LAMBDA) ?? compositeScore;
+
+  const migrated = {
+    ...product,
+    schema_version: PRODUCT_SCHEMA_VERSION,
+    scores,
+    waspas,
+    composite: waspas,
+    heritageFacts: Array.isArray(product.heritageFacts) ? product.heritageFacts : [],
+  };
+
+  return isCompleteProductScore(migrated) ? migrated : null;
+}
+
+function parseStoredProducts(raw) {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    const records = Array.isArray(parsed) ? parsed : parsed?.products;
+    if (!Array.isArray(records)) return [];
+    return records.map(migrateProduct).filter(Boolean).slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function loadStoredProducts() {
+  LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  const products = parseStoredProducts(localStorage.getItem(STORAGE_KEY));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ schema_version: PRODUCT_SCHEMA_VERSION, products })
+  );
+  return products;
+}
+
+function persistProducts(products) {
+  const storedProducts = products.map(migrateProduct).filter(Boolean).slice(0, 12);
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ schema_version: PRODUCT_SCHEMA_VERSION, products: storedProducts })
+  );
+}
 
 function scoreColor(v) {
   if (v >= 70) return GREEN_ACCENT;
@@ -37,7 +209,16 @@ function riskStyle(risk) {
 }
 
 function cap(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  return str.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function formatDataSources(dataSources) {
+  if (!dataSources) return "";
+  if (typeof dataSources === "string") return dataSources;
+  if (Array.isArray(dataSources)) return dataSources.join(", ");
+  return Object.entries(dataSources)
+    .map(([key, value]) => `${cap(key)}: ${Array.isArray(value) ? value.join(", ") : value}`)
+    .join(" | ");
 }
 
 function LeafIcon() {
@@ -104,6 +285,8 @@ function ProductCard({ p, isActive, offset, onClick }) {
   const opacity = isActive ? 1 : 0.55 - absOff * 0.1;
   const rotate = offset * 4;
   const rs = riskStyle(p.risk);
+  const scoreValue = isFiniteScore(p.waspas) ? p.waspas : p.composite;
+  const dataSourceText = formatDataSources(p.dataSources);
 
   return (
     <div
@@ -126,7 +309,7 @@ function ProductCard({ p, isActive, offset, onClick }) {
       {/* Score circle */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 18 }}>
         <div style={{ width: 64, height: 64, borderRadius: "50%", background: GREEN_MID, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-          <span style={{ color: "#fff", fontSize: 22, fontWeight: 600 }}>{p.waspas || p.composite}</span>
+          <span style={{ color: "#fff", fontSize: isFiniteScore(scoreValue) ? 22 : 12, fontWeight: 600 }}>{isFiniteScore(scoreValue) ? Math.round(scoreValue) : "No Data"}</span>
         </div>
         <div style={{ fontSize: 17, fontWeight: 600, color: "#0d3d22", marginBottom: 3, textAlign: "center", letterSpacing: "-0.2px" }}>{p.name}</div>
         <div style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 2, fontWeight: 500 }}>{p.brand}</div>
@@ -134,17 +317,20 @@ function ProductCard({ p, isActive, offset, onClick }) {
       </div>
 
       {/* Score bars */}
-      {Object.entries(p.scores).map(([key, val]) => (
+      {SCORE_KEYS.map((key) => {
+        const val = p.scores?.[key];
+        return (
         <div key={key} style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
             <span style={{ fontSize: 12, color: "#3a5a3a", fontWeight: 500 }}>{cap(key)}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: scoreColor(val) }}>{val}/100</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: scoreDisplayColor(val) }}>{scoreLabel(val)}</span>
           </div>
           <div style={{ height: 5, background: "#e0ede0", borderRadius: 3 }}>
-            <div style={{ height: 5, width: `${val}%`, background: scoreColor(val), borderRadius: 3, transition: "width 0.6s ease" }} />
+            <div style={{ height: 5, width: scoreWidth(val), background: scoreDisplayColor(val), borderRadius: 3, transition: "width 0.6s ease" }} />
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {/* Bottom badges */}
       <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
@@ -163,6 +349,18 @@ function ProductCard({ p, isActive, offset, onClick }) {
         <div style={{ marginTop: 12, fontSize: 11, color: "#7a9a7a", textAlign: "center", lineHeight: 1.5, fontStyle: "italic" }}>
           {p.greenwashing.reason}
         </div>
+      )}
+
+      {p.heritageFacts?.[0] && (
+        <div role="status" style={{ marginTop: 16, background: "#f2f8e9", border: "1px solid #cfe3b5", borderRadius: 12, padding: "12px 13px", color: "#31562d" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 5 }}>Heritage fun fact</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>{p.heritageFacts[0].fun_fact}</div>
+          <div style={{ fontSize: 10, lineHeight: 1.35, marginTop: 7, color: "#668363" }}>{p.heritageFacts[0].disclaimer}</div>
+        </div>
+      )}
+
+      {dataSourceText && (
+        <div style={{ marginTop: 10, fontSize: 10, color: "#8aa48f", textAlign: "center" }}>Data: {dataSourceText}</div>
       )}
     </div>
   );
@@ -209,7 +407,12 @@ function CardCarousel({ products }) {
   );
 }
 
-function HomePage() {
+function HomePage({ products }) {
+  const scans = products.length;
+  const scoredProducts = products.filter(isCompleteProductScore);
+  const averageScore = scoredProducts.length ? Math.round(scoredProducts.reduce((sum, p) => sum + p.waspas, 0) / scoredProducts.length) : null;
+  const heritageMatches = products.reduce((sum, p) => sum + (p.heritageFacts?.length || 0), 0);
+  const lowRisk = products.filter((p) => p.risk === "Low").length;
   return (
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 16, fontWeight: 600 }}>Product Lookup</div>
@@ -217,18 +420,27 @@ function HomePage() {
         Know what's <em style={{ color: GREEN_ACCENT, fontStyle: "italic", fontWeight: 400 }}>really</em><br />in your basket
       </h1>
       <p style={{ fontSize: 16, color: "#5a7a6a", lineHeight: 1.8, maxWidth: 560, marginBottom: 48, fontWeight: 400 }}>
-        Discover the truth behind everyday products with comprehensive sustainability, health, and transparency ratings — powered by verified data.
+        Identify products from barcode databases, then score ingredients from regulator and standards evidence.
       </p>
 
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, color: "#0d3d22", fontWeight: 600, marginBottom: 4, letterSpacing: "-0.3px" }}>Featured Products</h2>
-        <p style={{ fontSize: 14, color: GREEN_MUTED, fontWeight: 400 }}>Browse our verified sustainable product catalogue</p>
+        <h2 style={{ fontSize: 22, color: "#0d3d22", fontWeight: 600, marginBottom: 4, letterSpacing: "-0.3px" }}>Your recent lookups</h2>
+        <p style={{ fontSize: 14, color: GREEN_MUTED, fontWeight: 400 }}>Saved in this browser, so your dashboard reflects real scans instead of sample products.</p>
       </div>
 
-      <CardCarousel products={CATALOGUE_PRODUCTS} />
+      {scans ? <CardCarousel products={products} /> : (
+        <div style={{ background: "#fff", border: "1.5px dashed #c5dfc5", borderRadius: 16, padding: "44px 28px", textAlign: "center", color: GREEN_MUTED }}>
+          Your first verified lookup will appear here.
+        </div>
+      )}
 
       <div style={{ background: "#fff", borderRadius: 16, padding: "28px 0", margin: "40px 0 0", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
-        {DB_STATS.map((s, i) => (
+        {[
+          { val: scans, label: "Lookups saved" },
+          { val: averageScore === null ? "—" : `${averageScore}/100`, label: "Average score" },
+          { val: heritageMatches, label: "Heritage matches" },
+          { val: lowRisk, label: "Low-risk products" },
+        ].map((s, i) => (
           <div key={s.label} style={{ textAlign: "center", borderRight: i < 3 ? "1px solid #e5f0e5" : "none", padding: "0 20px" }}>
             <div style={{ fontSize: 34, color: GREEN_MID, fontWeight: 600, lineHeight: 1, letterSpacing: "-1px" }}>{s.val}</div>
             <div style={{ fontSize: 12, color: "#8abf9a", letterSpacing: "1px", textTransform: "uppercase", marginTop: 8, fontWeight: 500 }}>{s.label}</div>
@@ -239,49 +451,23 @@ function HomePage() {
   );
 }
 
-function SearchPage() {
+function SearchPage({ onProductLookup }) {
   const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultProducts, setResultProducts] = useState([]);
   const [error, setError] = useState("");
-  const [weights, setWeights] = useState({ sustainability: 0.25, health: 0.25, transparency: 0.25, social: 0.25 });
-
-  const updateWeight = (key, newVal) => {
-    const val = parseFloat(newVal);
-    const others = Object.keys(weights).filter((k) => k !== key);
-    const otherTotal = others.reduce((s, k) => s + weights[k], 0);
-    const remaining = 1 - val;
-    const updated = { ...weights, [key]: val };
-    if (otherTotal > 0) {
-      others.forEach((k) => { updated[k] = parseFloat(((weights[k] / otherTotal) * remaining).toFixed(2)); });
-    } else {
-      others.forEach((k) => { updated[k] = parseFloat((remaining / 3).toFixed(2)); });
-    }
-    setWeights(updated);
-  };
 
   const search = async () => {
     if (!barcode.trim()) return;
     setLoading(true); setError(""); setResultProducts([]);
     try {
-      const w = weights;
-      const res = await fetch(`http://127.0.0.1:8080/product/${barcode.trim()}?w1=${w.sustainability}&w2=${w.health}&w3=${w.transparency}&w4=${w.social}`);
+      const res = await fetch(`http://127.0.0.1:8080/product/${barcode.trim()}`);
       const data = await res.json();
       if (data.error) { setError("Product not found. Try another barcode."); setLoading(false); return; }
 
-      // Format into card format
-      const card = {
-        name: data.name,
-        brand: data.brand,
-        category: "Scanned Product",
-        scores: data.scores,
-        waspas: data.composite,
-        composite: data.composite,
-        risk: data.greenwashing?.risk || "Unknown",
-        longevity: data.longevity || null,
-        greenwashing: data.greenwashing,
-      };
+      const card = productFromApi(data, barcode.trim());
       setResultProducts([card]);
+      onProductLookup(card);
     } catch { setError("Could not connect to server. Make sure your backend is running on port 8080."); }
     setLoading(false);
   };
@@ -290,7 +476,7 @@ function SearchPage() {
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Barcode Search</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>Search a product</h2>
-      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 32, fontWeight: 400, lineHeight: 1.7 }}>Enter a barcode number to look up real-time sustainability, health, and transparency data.</p>
+      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 32, fontWeight: 400, lineHeight: 1.7 }}>Enter a barcode number to look up product identity and regulator-backed ingredient evidence.</p>
 
       {/* Search bar */}
       <div style={{ display: "flex", gap: 12, marginBottom: 32 }}>
@@ -307,27 +493,6 @@ function SearchPage() {
         <button onClick={search} style={{ padding: "14px 28px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: "0.3px" }}>
           Search
         </button>
-      </div>
-
-      {/* Priority sliders */}
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, marginBottom: 32 }}>
-        <div style={{ fontSize: 12, letterSpacing: "2px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 16, fontWeight: 600 }}>Your Priorities</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {Object.entries(weights).map(([key, val]) => (
-            <div key={key}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 13, color: "#0d3d22", fontWeight: 600 }}>{cap(key)}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: GREEN_MID }}>{Math.round(val * 100)}%</span>
-              </div>
-              <input type="range" min="0.05" max="0.85" step="0.01" value={val}
-                onChange={(e) => updateWeight(key, e.target.value)}
-                style={{ width: "100%", accentColor: GREEN_MID }} />
-            </div>
-          ))}
-        </div>
-        <p style={{ fontSize: 12, color: "#a0bfa8", marginTop: 12, fontWeight: 400 }}>
-          Sliders auto-balance to always total 100%. Adjust to reflect what matters most to you.
-        </p>
       </div>
 
       {loading && (
@@ -354,71 +519,181 @@ function SearchPage() {
   );
 }
 
-function ScanPage({ onSwitchToSearch }) {
-  const [scanning, setScanning] = useState(false);
+function ScanPage({ onSwitchToSearch, onProductLookup }) {
+  const [scanning, setScanning]     = useState(false);
   const [scannedCode, setScannedCode] = useState("");
-
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState(null);
+  const [error, setError]           = useState("");
+ 
+  // Called automatically the moment the camera reads a barcode.
+  // Closes the camera, saves the code, and fires the API call immediately.
+  const handleScan = async (code) => {
+    setScanning(false);
+    setScannedCode(code);
+    setResult(null);
+    setError("");
+    setLoading(true);
+ 
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8080/product/${code}`
+      );
+      const data = await res.json();
+ 
+      if (data.error) {
+        setError("Product not found in any database.");
+      } else {
+        const card = productFromApi(data, code);
+        setResult(card);
+        onProductLookup(card);
+      }
+    } catch {
+      setError("Could not connect to backend. Make sure it's running on port 8080.");
+    }
+ 
+    setLoading(false);
+  };
+ 
+  const resetScan = () => {
+    setScanning(true);
+    setScannedCode("");
+    setResult(null);
+    setError("");
+  };
+ 
   return (
     <div style={{ padding: "40px 52px" }}>
-      <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Barcode Scanner</div>
-      <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>Scan a product</h2>
-      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 40, fontWeight: 400, lineHeight: 1.7 }}>Use your device camera to instantly scan any product barcode and retrieve its sustainability profile.</p>
-
+      {/* Page header */}
+      <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>
+        Barcode Scanner
+      </div>
+      <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 8, letterSpacing: "-0.5px" }}>
+        Scan a product
+      </h2>
+      <p style={{ fontSize: 14, color: "#5a7a6a", marginBottom: 40, fontWeight: 400, lineHeight: 1.7 }}>
+        Use your device camera to identify a product and retrieve regulator-backed ingredient evidence.
+      </p>
+ 
+      {/* Detected barcode banner — shown as soon as a code is read */}
       {scannedCode && (
         <div style={{ background: GREEN_LIGHT, border: `1px solid ${GREEN_MID}`, borderRadius: 10, padding: 16, marginBottom: 24, fontSize: 14, color: "#0d3d22", fontWeight: 500 }}>
-          Barcode Detected: <strong>{scannedCode}</strong> — Head to Search to look it up.
+          Barcode detected: <strong>{scannedCode}</strong>
+          {loading && <span style={{ color: GREEN_MUTED, fontWeight: 400 }}> — Fetching product data…</span>}
         </div>
       )}
-
-      {!scanning ? (
+ 
+      {/* Camera feed (active) or idle placeholder */}
+      {scanning ? (
+        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+          {/* BarcodeScanner calls onScan(code) automatically; no button press needed */}
+          <BarcodeScanner
+            onScan={handleScan}
+            onClose={() => setScanning(false)}
+          />
+        </div>
+      ) : (
         <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #c5dfc5", padding: 48, textAlign: "center", maxWidth: 440, margin: "0 auto" }}>
+          {/* Viewfinder graphic */}
           <div style={{ width: 160, height: 160, border: `2.5px solid ${GREEN_MID}`, borderRadius: 16, margin: "0 auto 32px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <div style={{ position: "absolute", top: -2, left: -2, width: 24, height: 24, borderTop: `3px solid ${GREEN_DARK}`, borderLeft: `3px solid ${GREEN_DARK}` }} />
-            <div style={{ position: "absolute", top: -2, right: -2, width: 24, height: 24, borderTop: `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
-            <div style={{ position: "absolute", bottom: -2, left: -2, width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderLeft: `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", top: -2, left: -2,  width: 24, height: 24, borderTop:    `3px solid ${GREEN_DARK}`, borderLeft:  `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", top: -2, right: -2, width: 24, height: 24, borderTop:    `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
+            <div style={{ position: "absolute", bottom: -2, left: -2,  width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderLeft:  `3px solid ${GREEN_DARK}` }} />
             <div style={{ position: "absolute", bottom: -2, right: -2, width: 24, height: 24, borderBottom: `3px solid ${GREEN_DARK}`, borderRight: `3px solid ${GREEN_DARK}` }} />
             <ScanIcon size={48} color="#c5dfc5" />
           </div>
-          <p style={{ fontSize: 15, color: "#5a7a6a", marginBottom: 8, fontWeight: 500 }}>Point your camera at any product barcode</p>
-          <p style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 28, fontWeight: 400 }}>Supported on most modern browsers with camera access enabled.</p>
+ 
+          <p style={{ fontSize: 15, color: "#5a7a6a", marginBottom: 8, fontWeight: 500 }}>
+            Point your camera at any product barcode
+          </p>
+          <p style={{ fontSize: 13, color: GREEN_MUTED, marginBottom: 28, fontWeight: 400 }}>
+            Results appear automatically — no button press needed.
+          </p>
+ 
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-            <button onClick={() => setScanning(true)} style={{ padding: "12px 24px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-              Open Camera
+            <button
+              onClick={resetScan}
+              style={{ padding: "12px 24px", background: GREEN_MID, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            >
+              {scannedCode ? "Scan Again" : "Open Camera"}
             </button>
-            <button onClick={onSwitchToSearch} style={{ padding: "12px 24px", background: "#fff", color: GREEN_MID, border: `1.5px solid ${GREEN_MID}`, borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+            <button
+              onClick={onSwitchToSearch}
+              style={{ padding: "12px 24px", background: "#fff", color: GREEN_MID, border: `1.5px solid ${GREEN_MID}`, borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+            >
               Enter Manually
             </button>
           </div>
         </div>
-      ) : (
-        <div style={{ maxWidth: 440, margin: "0 auto" }}>
-          <BarcodeScanner
-            onScan={(code) => { setScannedCode(code); setScanning(false); }}
-            onClose={() => setScanning(false)}
-          />
+      )}
+ 
+      {/* Loading indicator */}
+      {loading && (
+        <div style={{ textAlign: "center", color: GREEN_MUTED, padding: 40, fontSize: 15, fontWeight: 500 }}>
+          Analysing product data…
+        </div>
+      )}
+ 
+      {/* Error state */}
+      {error && (
+        <div style={{ background: "#fff0f0", color: "#b83232", padding: 16, borderRadius: 10, fontSize: 14, fontWeight: 500, marginTop: 24 }}>
+          {error}
+        </div>
+      )}
+ 
+      {/* Result card — reuses the exact same CardCarousel + ProductCard as SearchPage */}
+      {result && !loading && (
+        <div style={{ marginTop: 32 }}>
+          <h3 style={{ fontSize: 18, color: "#0d3d22", fontWeight: 600, marginBottom: 4 }}>Result</h3>
+          <p style={{ fontSize: 13, color: GREEN_MUTED, fontWeight: 400, marginBottom: 16 }}>
+            Scanned product analysis
+          </p>
+          <CardCarousel products={[result]} />
         </div>
       )}
     </div>
   );
 }
 
-function AnalyticsPage() {
-  const avgScores = ["sustainability", "health", "transparency", "social"].map((key) => ({
+function AnalyticsPage({ products }) {
+  const analyticsProducts = products.filter(isCompleteProductScore);
+  const hasProducts = analyticsProducts.length > 0;
+
+  // ── WASPAS controls ─────────────────────────────────────────────────────────
+  const [weights, setWeights] = useState({ ...DEFAULT_WEIGHTS });
+  const [lambda, setLambda] = useState(DEFAULT_LAMBDA);
+
+  const weightTotal = SCORE_KEYS.reduce((s, k) => s + weights[k], 0);
+  const setWeight = (key, raw) => setWeights((prev) => ({ ...prev, [key]: Math.round(raw * 100) / 100 }));
+  const resetWeights = () => { setWeights({ ...DEFAULT_WEIGHTS }); setLambda(DEFAULT_LAMBDA); };
+
+  // Live WASPAS score for each product under the current weights/lambda
+  const liveWaspas = (p) => computeWaspas(p.scores, weights, lambda);
+
+  // Averages using live weights
+  const avgScores = SCORE_KEYS.map((key) => ({
     label: key,
-    avg: Math.round(CATALOGUE_PRODUCTS.reduce((s, p) => s + p.scores[key], 0) / CATALOGUE_PRODUCTS.length),
+    avg: hasProducts ? analyticsProducts.reduce((s, p) => s + p.scores[key], 0) / analyticsProducts.length : null,
   }));
-  const avgWaspas = Math.round(CATALOGUE_PRODUCTS.reduce((s, p) => s + p.waspas, 0) / CATALOGUE_PRODUCTS.length);
-  const lowRisk = CATALOGUE_PRODUCTS.filter((p) => p.risk === "Low").length;
+  const avgWaspas = hasProducts
+    ? analyticsProducts.reduce((s, p) => s + (liveWaspas(p) ?? 0), 0) / analyticsProducts.length
+    : null;
+  const lowRisk = analyticsProducts.filter((p) => p.risk === "Low").length;
+
+  const sliderStyle = {
+    width: "100%", accentColor: GREEN_MID, cursor: "pointer", height: 4,
+  };
 
   return (
     <div style={{ padding: "40px 52px" }}>
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>Platform Insights</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 32, letterSpacing: "-0.5px" }}>Analytics Overview</h2>
 
+      {/* Summary tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
         {[
-          { label: "Avg. WASPAS Score", val: avgWaspas, sub: "Across all catalogued products" },
-          { label: "Products Catalogued", val: CATALOGUE_PRODUCTS.length, sub: "In current session" },
+          { label: "Avg. WASPAS Score", val: isFiniteScore(avgWaspas) ? `${Math.round(avgWaspas * 10) / 10}/100` : "—", sub: "Live — updates with your weights" },
+          { label: "Products Analysed", val: analyticsProducts.length, sub: "Complete saved evidence records" },
           { label: "Low Risk Products", val: lowRisk, sub: "Below greenwashing threshold" },
         ].map((c) => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: 24, border: "1px solid #e0ede0" }}>
@@ -429,45 +704,120 @@ function AnalyticsPage() {
         ))}
       </div>
 
+      {/* ── WASPAS weight controls ── */}
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 20 }}>Average Scores by Dimension</div>
-        {avgScores.map((s) => (
-          <div key={s.label} style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(s.label)}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(s.avg) }}>{s.avg}/100</span>
-            </div>
-            <div style={{ height: 10, background: "#e0ede0", borderRadius: 5 }}>
-              <div style={{ height: 10, width: `${s.avg}%`, background: scoreColor(s.avg), borderRadius: 5 }} />
-            </div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#0d3d22" }}>WASPAS Weight Controls</span>
+            <span style={{ fontSize: 12, color: GREEN_MUTED, marginLeft: 10 }}>
+              Weights sum: <strong style={{ color: Math.abs(weightTotal - 1) > 0.005 ? "#b83232" : GREEN_MID }}>{(weightTotal * 100).toFixed(0)}%</strong>
+              <span style={{ marginLeft: 6, color: "#a0bfa8" }}>(normalised automatically)</span>
+            </span>
           </div>
-        ))}
+          <button onClick={resetWeights} style={{ fontSize: 11, color: GREEN_MUTED, background: "none", border: `1px solid #c5dfc5`, borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontWeight: 600 }}>
+            Reset defaults
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: "#8abf9a", marginBottom: 20, lineHeight: 1.6 }}>
+          WASPAS = λ · WSM + (1−λ) · WPM&nbsp;&nbsp;|&nbsp;&nbsp;WSM = weighted sum, WPM = weighted product. Scores update live in the table below.
+        </p>
+
+        {/* λ slider */}
+        <div style={{ marginBottom: 20, padding: "14px 16px", background: "#f5f9f2", borderRadius: 10, border: "1px solid #dceedd" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#0d3d22" }}>λ (lambda) — WSM ↔ WPM blend</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: GREEN_MID }}>{lambda.toFixed(2)}</span>
+          </div>
+          <input type="range" min={0} max={1} step={0.01} value={lambda}
+            onChange={(e) => setLambda(parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#a0bfa8", marginTop: 4 }}>
+            <span>0 = pure WPM (strict)</span><span>0.5 = balanced</span><span>1 = pure WSM (lenient)</span>
+          </div>
+        </div>
+
+        {/* Dimension weight sliders */}
+        {SCORE_KEYS.map((key) => {
+          const normPct = weightTotal > 0 ? ((weights[key] / weightTotal) * 100).toFixed(1) : "0.0";
+          return (
+            <div key={key} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(key)}</span>
+                <span style={{ fontSize: 12, color: "#a0bfa8" }}>
+                  raw {(weights[key] * 100).toFixed(0)}% &nbsp;·&nbsp;
+                  <strong style={{ color: GREEN_MID }}>effective {normPct}%</strong>
+                </span>
+              </div>
+              <input type="range" min={0} max={1} step={0.01} value={weights[key]}
+                onChange={(e) => setWeight(key, parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+          );
+        })}
       </div>
 
+      {/* Average scores by dimension */}
+      <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0", marginBottom: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 20 }}>Average Scores by Dimension</div>
+        {!hasProducts && <p style={{ fontSize: 14, color: GREEN_MUTED, marginBottom: 20 }}>No complete evidence-engine score records yet. Scan or search a barcode to build your personal analytics.</p>}
+        {avgScores.map((s) => {
+          const w = weightTotal > 0 ? weights[s.label] / weightTotal : 0;
+          return (
+            <div key={s.label} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: "#3a5a3a", fontWeight: 600 }}>{cap(s.label)}</span>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "#a0bfa8" }}>weight {(w * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: scoreDisplayColor(s.avg) }}>{isFiniteScore(s.avg) ? `${Math.round(s.avg)}/100` : "No Data"}</span>
+                </div>
+              </div>
+              <div style={{ height: 10, background: "#e0ede0", borderRadius: 5 }}>
+                <div style={{ height: 10, width: isFiniteScore(s.avg) ? `${Math.max(0, Math.min(100, s.avg))}%` : "0%", background: scoreDisplayColor(s.avg), borderRadius: 5 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Product comparison table with live WASPAS */}
       <div style={{ background: "#fff", borderRadius: 14, padding: 28, border: "1px solid #e0ede0" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 16 }}>Product Comparison</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#0d3d22", marginBottom: 16 }}>
+          Product Comparison
+          <span style={{ fontSize: 12, fontWeight: 400, color: GREEN_MUTED, marginLeft: 10 }}>WASPAS scores update live as you adjust weights</span>
+        </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1.5px solid #e0ede0" }}>
-              {["Product", "Brand", "WASPAS", "Risk"].map((h) => (
+              {["Product", "Brand", "WASPAS Score", "Risk"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: GREEN_MUTED, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {CATALOGUE_PRODUCTS.map((p, i) => {
-              const rs = riskStyle(p.risk);
-              return (
-                <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
-                  <td style={{ padding: "10px 12px", color: "#0d3d22", fontWeight: 500 }}>{p.name}</td>
-                  <td style={{ padding: "10px 12px", color: GREEN_MUTED, fontWeight: 400 }}>{p.brand}</td>
-                  <td style={{ padding: "10px 12px", color: GREEN_MID, fontWeight: 600 }}>{p.waspas}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span style={{ background: rs.bg, color: rs.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{p.risk}</span>
-                  </td>
-                </tr>
-              );
-            })}
+            {analyticsProducts
+              .map((p) => ({ ...p, _live: liveWaspas(p) }))
+              .sort((a, b) => (b._live ?? -1) - (a._live ?? -1))
+              .map((p, i) => {
+                const rs = riskStyle(p.risk);
+                const live = p._live;
+                return (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0f7f0" }}>
+                    <td style={{ padding: "10px 12px", color: "#0d3d22", fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ padding: "10px 12px", color: GREEN_MUTED, fontWeight: 400 }}>{p.brand}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ color: scoreDisplayColor(live), fontWeight: 700, fontSize: 14 }}>
+                        {isFiniteScore(live) ? `${Math.round(live * 10) / 10}/100` : "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <span style={{ background: rs.bg, color: rs.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{p.risk}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            {!hasProducts && <tr><td colSpan="4" style={{ padding: "18px 12px", color: GREEN_MUTED }}>No products analysed yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -477,10 +827,10 @@ function AnalyticsPage() {
 
 function AboutPage() {
   const pillars = [
-    { title: "Sustainability", desc: "Environmental impact, carbon footprint, packaging and supply chain eco-scores sourced from Open Food Facts and verified eco-score databases." },
-    { title: "Health & Safety", desc: "Nutritional data, additives and NutriScore ratings from verified food databases, mapped to a clear 0–100 health index." },
-    { title: "Transparency", desc: "Ingredient completeness, label certification count and traceability scoring — rewarding brands that clearly show their workings." },
-    { title: "Social Impact", desc: "Fair trade certification, ethical sourcing and manufacturing origin data aggregated from public brand disclosures and third-party audits." },
+    { title: "Product Identity", desc: "Open Food Facts and Open Beauty Facts identify the product, manufacturer, category, and ingredient text only." },
+    { title: "Regulatory Evidence", desc: "EFSA, FDA, Codex, FSSAI, REACH, CDSCO, AYUSH, NIN, and GS1 evidence records evaluate ingredients and traceability." },
+    { title: "Evidence Graph", desc: "Every score contribution is stored as an ingredient, source, regulation, confidence, and contribution chain." },
+    { title: "Confidence", desc: "Missing evidence reduces confidence without automatically treating unknown ingredients as unsafe." },
   ];
 
   return (
@@ -488,7 +838,7 @@ function AboutPage() {
       <div style={{ fontSize: 11, letterSpacing: "3px", textTransform: "uppercase", color: GREEN_MUTED, marginBottom: 12, fontWeight: 600 }}>About ClarityX</div>
       <h2 style={{ fontSize: 30, color: "#0d3d22", fontWeight: 300, marginBottom: 16, letterSpacing: "-0.5px" }}>The platform behind the scores</h2>
       <p style={{ fontSize: 15, color: "#5a7a6a", lineHeight: 1.8, maxWidth: 600, marginBottom: 48, fontWeight: 400 }}>
-        ClarityX cross-references the Open Food Facts database — covering over 3 million products — with eco-score indexes, nutritional databases, and social responsibility disclosures to produce a single weighted composite score for any barcoded product.
+        ClarityX uses identity databases to identify products and regulator-backed evidence to evaluate ingredients. Scores are generated from auditable evidence graph records, not brand reputation or packaging claims.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
@@ -504,9 +854,9 @@ function AboutPage() {
       </div>
 
       <div style={{ background: GREEN_DARK, borderRadius: 16, padding: 32, color: "#fff" }}>
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, letterSpacing: "-0.3px" }}>WASPAS Scoring Method</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, letterSpacing: "-0.3px" }}>Evidence Scoring Method</div>
         <p style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", lineHeight: 1.8, fontWeight: 400 }}>
-          The Weighted Aggregated Sum Product Assessment (WASPAS) combines a Weighted Sum Model (WSM) and a Weighted Product Model (WPM) with equal weighting (λ = 0.5). This hybrid approach is more reliable than either method alone, balancing additive and multiplicative relationships between sustainability criteria.
+          Each score consumes only evidence graph data. Unknown provider results are preserved as UNKNOWN and affect confidence, not automatic safety conclusions.
         </p>
       </div>
     </div>
@@ -544,12 +894,23 @@ function Sidebar({ active, onNavigate }) {
 
 export default function App() {
   const [page, setPage] = useState("home");
+  const [products, setProducts] = useState(loadStoredProducts);
+
+  useEffect(() => {
+    persistProducts(products);
+  }, [products]);
+
+  const recordProduct = (product) => {
+    const normalized = migrateProduct(product);
+    if (!normalized) return;
+    setProducts((current) => [normalized, ...current.filter((item) => item.barcode !== normalized.barcode)].slice(0, 12));
+  };
 
   const pages = {
-    home: <HomePage />,
-    search: <SearchPage />,
-    scan: <ScanPage onSwitchToSearch={() => setPage("search")} />,
-    analytics: <AnalyticsPage />,
+    home: <HomePage products={products} />,
+    search: <SearchPage onProductLookup={recordProduct} />,
+    scan: <ScanPage onSwitchToSearch={() => setPage("search")} onProductLookup={recordProduct} />,
+    analytics: <AnalyticsPage products={products} />,
     about: <AboutPage />,
   };
 
@@ -558,6 +919,9 @@ export default function App() {
       <Sidebar active={page} onNavigate={setPage} />
       <main style={{ flex: 1, overflowY: "auto", minHeight: "100vh" }}>
         {pages[page]}
+        <footer style={{ padding: "24px 52px 32px", color: "#668363", fontSize: 12, lineHeight: 1.6 }}>
+          <strong style={{ color: "#31562d" }}>How ClarityX works:</strong> Open Food Facts and Open Beauty Facts identify products only. Regulatory and standards providers evaluate ingredients, persist evidence graph records, and produce auditable scores. Heritage notes describe identity and references only, not efficacy or medical claims.
+        </footer>
       </main>
     </div>
   );

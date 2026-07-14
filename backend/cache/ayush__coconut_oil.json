@@ -1,0 +1,43 @@
+{
+  "normalized_response": {
+    "confidence": 0.82,
+    "details": {
+      "botanical_identity": "Cocos nucifera",
+      "claim_policy": "No efficacy or medical claims generated",
+      "sanskrit_name": "Narikela taila",
+      "traditional_system": "Ayurveda",
+      "version": "ayush-heritage-local-reference-v2-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "coconut oil",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "Botanical identity heritage reference",
+    "retrieved_at": "2026-06-23T05:44:08.731899+00:00",
+    "source": "AYUSH",
+    "status": "IDENTIFIED"
+  },
+  "provider": "AYUSH",
+  "raw_response": {
+    "confidence": 0.82,
+    "details": {
+      "botanical_identity": "Cocos nucifera",
+      "claim_policy": "No efficacy or medical claims generated",
+      "sanskrit_name": "Narikela taila",
+      "traditional_system": "Ayurveda",
+      "version": "ayush-heritage-local-reference-v2-2026-06"
+    },
+    "evidence_type": "heritage",
+    "ingredient": "coconut oil",
+    "references": [
+      "https://www.ayush.gov.in/"
+    ],
+    "regulation": "Botanical identity heritage reference",
+    "retrieved_at": "2026-06-23T05:44:08.731899+00:00",
+    "source": "AYUSH",
+    "status": "IDENTIFIED"
+  },
+  "timestamp": "2026-06-23T05:44:08.733885+00:00",
+  "version": "ayush-heritage-local-reference-v2-2026-06"
+}

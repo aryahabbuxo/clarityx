@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "isopropyl palmitate",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T06:20:39.899703+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "provider": "FSSAI",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "isopropyl palmitate",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T06:20:39.899703+00:00",
+    "source": "FSSAI",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T06:20:39.901703+00:00",
+  "version": "fssai-additive-compliance-local-v2-2026-06"
+}

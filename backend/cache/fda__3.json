@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fda-food-substances-local-reference-2026-06"
+    },
+    "evidence_type": "regulatory",
+    "ingredient": "3%",
+    "references": [
+      "https://open.fda.gov/apis/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.661512+00:00",
+    "source": "FDA",
+    "status": "UNKNOWN"
+  },
+  "provider": "FDA",
+  "raw_response": {
+    "confidence": 0.2,
+    "details": {
+      "version": "fda-food-substances-local-reference-2026-06"
+    },
+    "evidence_type": "regulatory",
+    "ingredient": "3%",
+    "references": [
+      "https://open.fda.gov/apis/"
+    ],
+    "regulation": "No matching regulator record",
+    "retrieved_at": "2026-06-23T05:03:17.661512+00:00",
+    "source": "FDA",
+    "status": "UNKNOWN"
+  },
+  "timestamp": "2026-06-23T05:03:17.664510+00:00",
+  "version": "fda-food-substances-local-reference-2026-06"
+}

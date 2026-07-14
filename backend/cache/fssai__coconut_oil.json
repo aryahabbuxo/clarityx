@@ -1,0 +1,39 @@
+{
+  "normalized_response": {
+    "confidence": 0.82,
+    "details": {
+      "botanical_identity": "Cocos nucifera",
+      "category": "Edible oil",
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "coconut oil",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "FSSAI edible oil standard",
+    "retrieved_at": "2026-06-23T05:44:08.719447+00:00",
+    "source": "FSSAI",
+    "status": "PERMITTED"
+  },
+  "provider": "FSSAI",
+  "raw_response": {
+    "confidence": 0.82,
+    "details": {
+      "botanical_identity": "Cocos nucifera",
+      "category": "Edible oil",
+      "version": "fssai-additive-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "coconut oil",
+    "references": [
+      "https://www.fssai.gov.in/"
+    ],
+    "regulation": "FSSAI edible oil standard",
+    "retrieved_at": "2026-06-23T05:44:08.719447+00:00",
+    "source": "FSSAI",
+    "status": "PERMITTED"
+  },
+  "timestamp": "2026-06-23T05:44:08.720474+00:00",
+  "version": "fssai-additive-compliance-local-v2-2026-06"
+}

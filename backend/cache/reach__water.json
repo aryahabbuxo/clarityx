@@ -1,0 +1,35 @@
+{
+  "normalized_response": {
+    "confidence": 0.7,
+    "details": {
+      "version": "reach-local-reference-2026-06"
+    },
+    "evidence_type": "cosmetic_safety",
+    "ingredient": "water",
+    "references": [
+      "https://echa.europa.eu/information-on-chemicals"
+    ],
+    "regulation": "Cosmetic ingredient identity",
+    "retrieved_at": "2026-06-23T05:10:23.346199+00:00",
+    "source": "REACH",
+    "status": "LISTED"
+  },
+  "provider": "REACH",
+  "raw_response": {
+    "confidence": 0.7,
+    "details": {
+      "version": "reach-local-reference-2026-06"
+    },
+    "evidence_type": "cosmetic_safety",
+    "ingredient": "water",
+    "references": [
+      "https://echa.europa.eu/information-on-chemicals"
+    ],
+    "regulation": "Cosmetic ingredient identity",
+    "retrieved_at": "2026-06-23T05:10:23.346199+00:00",
+    "source": "REACH",
+    "status": "LISTED"
+  },
+  "timestamp": "2026-06-23T05:10:23.351216+00:00",
+  "version": "reach-local-reference-2026-06"
+}

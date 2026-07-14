@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from product_data import get_product
-from scoring import sustainability_score, health_score, transparency_score, social_score, waspas_score
-from greenwashing import extract_eco_claims, greenwashing_risk
-from nlp import longevity_score
+
+from evidence_engine import EvidenceEngine
+from greenwashing import greenwashing_risk
+from heritage import heritage_ingredients_from_matches, heritage_matches
+from ingredient_resolver import resolve_ingredients
+from product_data import get_product_identity
+from providers.gs1_provider import Gs1Provider
+from scoring import score_evidence_graph
+
 
 app = FastAPI()
+SCORE_SCHEMA_VERSION = 1
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,68 +20,81 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def root():
-    return {"status": "ClarityX is running!"}
+    return {"status": "ClarityX evidence engine is running"}
+
 
 @app.get("/product/{barcode}")
-def product(barcode: str, w1: float=0.25, w2: float=0.25, w3: float=0.25, w4: float=0.25):
-    p = get_product(barcode)
-    if not p:
+def product(barcode: str):
+    identity = get_product_identity(barcode)
+    if not identity:
         return {"error": "Product not found"}
-    
-    certs = p.get("labels_tags", [])
-    ingredients = p.get("ingredients_text", "") or ""
-    packaging = p.get("packaging", "") or ""
-    brand = p.get("brands", "") or ""
-    description = (p.get("generic_name", "") or "") + " " + (p.get("product_name", "") or "")
 
-    s1 = sustainability_score(certs, packaging, ingredients)
-    s2 = health_score(ingredients)
-    s3 = transparency_score(certs, ingredients, packaging)
-    s4 = social_score(certs, brand)
-    composite = waspas_score([s1, s2, s3, s4], [w1, w2, w3, w4])
-    
-    claims = extract_eco_claims(description + " " + ingredients + " " + packaging)
-    gw = greenwashing_risk(claims, certs, brand, packaging, ingredients)
-    
-    test_reviews = [
-        f"This {p.get('product_name','product')} lasted a long time, great quality",
-        f"The {p.get('product_name','product')} broke after one week, very cheap",
-        f"Still using this after 6 months, very durable and sturdy",
-        f"Fell apart quickly, not worth the money",
-        f"Excellent product, months later still working perfectly"
-    ]
-    longevity = longevity_score(test_reviews)
+    heritage = heritage_matches(identity.get("product_name", ""), identity.get("ingredients", ""))
+    canonical_ingredients = resolve_ingredients(identity.get("ingredients", ""))
+    seen_ingredients = {ingredient.canonical_name for ingredient in canonical_ingredients}
+    for ingredient in heritage_ingredients_from_matches(heritage):
+        if ingredient.canonical_name not in seen_ingredients:
+            canonical_ingredients.append(ingredient)
+            seen_ingredients.add(ingredient.canonical_name)
+    gs1 = Gs1Provider().verify(barcode, identity.get("manufacturer", ""))
+    graph = EvidenceEngine().build_graph(
+        product_id=barcode,
+        ingredients=canonical_ingredients,
+        traceability_evidence=gs1["evidence"],
+    )
+    score_result = score_evidence_graph(graph)
+    graph.persist()
+
+    greenwashing = greenwashing_risk(marketing_claims=[], graph=graph)
+
+    numeric_scores = {
+        "regulatory_compliance": score_result["scores"]["RegulatoryComplianceScore"]["score"],
+        "ingredient_safety": score_result["scores"]["IngredientSafetyScore"]["score"],
+        "nutritional_quality": score_result["scores"]["NutritionalQualityScore"]["score"],
+        "certification_credibility": score_result["scores"]["CertificationCredibilityScore"]["score"],
+        "heritage_authenticity": score_result["scores"]["HeritageAuthenticityScore"]["score"],
+        "transparency": score_result["scores"]["TransparencyScore"]["score"],
+        "traceability_confidence": score_result["scores"]["TraceabilityConfidenceScore"]["score"],
+    }
 
     return {
-        "name": p.get("product_name", "Unknown"),
-        "brand": brand,
-        "scores": {
-            "sustainability": s1,
-            "health": s2,
-            "transparency": s3,
-            "social": s4
+        "identity": identity,
+        "name": identity["product_name"],
+        "brand": identity["manufacturer"],
+        "score_schema_version": SCORE_SCHEMA_VERSION,
+        "score": score_result["score"],
+        "confidence": score_result["confidence"],
+        "scores": numeric_scores,
+        "score_details": score_result["scores"],
+        "source": "Evidence graph",
+        "evidence": score_result["evidence"]["evidence"],
+        "evidence_graph": score_result["evidence"],
+        "ingredients": [ingredient.to_dict() for ingredient in canonical_ingredients],
+        "traceability": {
+            "gtin_validity": gs1["gtin_validity"],
+            "manufacturer_verification": gs1["manufacturer_verification"],
+            "traceability_confidence": gs1["traceability_confidence"],
+            "source": gs1["source"],
         },
-        "composite": composite,
-        "greenwashing": gw,
-        "longevity": longevity
+        "greenwashing": greenwashing,
+        "heritage_facts": heritage,
+        "data_sources": {
+            "identity": identity["source"],
+            "evidence": ["EFSA", "FDA", "Codex", "FSSAI", "REACH", "CDSCO", "AYUSH", "NIN", "GS1"],
+        },
+        "principle": "Identity databases identify products; regulatory databases evaluate ingredients; scores are generated from evidence.",
     }
+
 
 @app.get("/longevity/{barcode}")
 def longevity_endpoint(barcode: str):
-    p = get_product(barcode)
-    if not p:
+    identity = get_product_identity(barcode)
+    if not identity:
         return {"error": "Product not found"}
-    test_reviews = [
-        f"This {p.get('product_name','product')} lasted a long time, great quality",
-        f"The {p.get('product_name','product')} broke after one week, very cheap",
-        f"Still using this after 6 months, very durable and sturdy",
-        f"Fell apart quickly, not worth the money",
-        f"Excellent product, months later still working perfectly"
-    ]
-    result = longevity_score(test_reviews)
     return {
-        "product": p.get("product_name", "Unknown"),
-        "longevity": result
+        "product": identity.get("product_name", "Unknown"),
+        "longevity": {"label": "Not assessed", "reason": "No verified, attributable review source is connected."},
     }

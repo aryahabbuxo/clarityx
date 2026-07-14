@@ -1,0 +1,37 @@
+{
+  "normalized_response": {
+    "confidence": 0.7,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "neem",
+    "references": [
+      "https://cdsco.gov.in/"
+    ],
+    "regulation": "Indian cosmetic botanical identity local table",
+    "retrieved_at": "2026-06-23T06:19:40.981939+00:00",
+    "source": "CDSCO",
+    "status": "COMPLIANT"
+  },
+  "provider": "CDSCO",
+  "raw_response": {
+    "confidence": 0.7,
+    "details": {
+      "botanical_identity": "Azadirachta indica",
+      "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
+    },
+    "evidence_type": "compliance",
+    "ingredient": "neem",
+    "references": [
+      "https://cdsco.gov.in/"
+    ],
+    "regulation": "Indian cosmetic botanical identity local table",
+    "retrieved_at": "2026-06-23T06:19:40.981939+00:00",
+    "source": "CDSCO",
+    "status": "COMPLIANT"
+  },
+  "timestamp": "2026-06-23T06:19:40.984468+00:00",
+  "version": "cdsco-cosmetic-compliance-local-v2-2026-06"
+}
